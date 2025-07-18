@@ -1,6 +1,30 @@
 # NATS Security and Multi-Tenancy Guide for Wolverine
 
-This guide explains how to implement secure, multi-tenant messaging using NATS' account system and security features.
+This guide explains how to implement secure, multi-tenant messaging using NATS' **native multi-tenancy capabilities**. 
+
+> **Key Insight**: NATS provides the most sophisticated native multi-tenancy of any message broker. Our Wolverine transport leverages these built-in capabilities rather than reimplementing multi-tenancy from scratch.
+>
+> For a comprehensive analysis of NATS native multi-tenancy features, see [NATS_NATIVE_MULTITENANCY_ANALYSIS.md](NATS_NATIVE_MULTITENANCY_ANALYSIS.md).
+
+## Multi-Tenancy Implementation Strategy
+
+### Recommended Approach: Start Simple, Scale to Enterprise
+
+**Phase 1: Subject-Based Multi-Tenancy** (Current - Simple & Effective)
+- Use NATS subject hierarchy with tenant ID in subject path
+- Leverage NATS subject mapping for automatic tenant routing
+- Single connection, works with existing authentication
+- **Implementation Status**: Ready for Phase 1
+
+**Phase 2: Account-Based Multi-Tenancy** (Future - Maximum Security)  
+- Complete namespace isolation per tenant via NATS accounts
+- Separate connections and JetStream storage per tenant
+- Enterprise-grade security with zero cross-tenant leakage
+
+**Phase 3: Auth Callout Integration** (Enterprise - Dynamic)
+- External IAM system integration (LDAP, OAuth, SAML)
+- Dynamic tenant provisioning and credential management
+- Real-time authentication via NATS auth callout service
 
 ## NATS Account System Overview
 
@@ -156,9 +180,49 @@ public class NatsSecurityProvider
 }
 ```
 
-## Multi-Tenant Wolverine Transport
+## Wolverine Transport Multi-Tenancy Patterns
 
-### Architecture Pattern 1: Account Per Tenant
+### Phase 1: Subject-Based Multi-Tenancy (Current Implementation)
+
+The simplest and most effective approach leverages NATS subject hierarchy:
+
+```csharp
+public class NatsSubjectBasedMultiTenancy
+{
+    public static void ConfigureWolverine(WolverineOptions opts)
+    {
+        opts.UseNats("nats://localhost:4222");
+        
+        // Publisher with tenant-aware subject resolution
+        opts.PublishMessage<OrderCreated>()
+            .ToNatsSubject("orders.created")  // Becomes "tenant.{id}.orders.created"
+            .UseTenantIdFromHeader();
+            
+        // Listener for tenant-specific subjects
+        opts.ListenToNatsSubject("tenant.*.orders.created")
+            .TenantAware()  // Extracts tenant from subject
+            .UseQueueGroup("order-processors");
+    }
+}
+
+// NATS server subject mapping configuration
+mappings: {
+    # Automatic tenant prefixing
+    "orders.*": "tenant.{{header('tenant-id')}}.orders.{{wildcard(1)}}"
+    
+    # Or deterministic partitioning by tenant
+    "events.*": "tenant.{{partition(10,1)}}.events.{{wildcard(1)}}"
+}
+```
+
+**Benefits of Subject-Based Approach:**
+- ✅ Simple to implement with existing transport
+- ✅ Works with single NATS connection
+- ✅ Leverages NATS native subject mapping
+- ✅ Tenant isolation via subject namespace
+- ✅ Compatible with existing authentication
+
+### Phase 2: Account-Based Multi-Tenancy (Future)
 
 ```csharp
 public class MultiTenantNatsTransport : ITransport
@@ -255,7 +319,92 @@ public class MultiTenantNatsTransport : ITransport
 }
 ```
 
-### Architecture Pattern 2: Subject-Based Isolation
+### Phase 3: Auth Callout Integration (Enterprise)
+
+> **Important**: Auth callout runs as a **separate sidecar service**, not within our Wolverine transport. Reference implementation: [synadia-io/callout.go](https://github.com/synadia-io/callout.go)
+
+**Deployment Architecture**:
+```
+Wolverine App → NATS Server (auth_callout enabled) → Auth Callout Sidecar
+```
+
+**Auth Callout Sidecar Service** (separate microservice):
+```go
+// External service using synadia-io/callout.go library
+func main() {
+    // Connect as privileged auth user
+    nc, _ := nats.Connect("nats://localhost:4222", nats.UserInfo("auth", "pwd"))
+    
+    // Tenant-aware authorization function
+    authorizer := func(req *jwt.AuthorizationRequest) (string, error) {
+        tenantId := extractTenantFromRequest(req)
+        
+        // Validate with your IAM (LDAP, OAuth, database)
+        if !iamService.ValidateUser(req.UserNkey, tenantId) {
+            return "", errors.New("unauthorized")
+        }
+        
+        // Create tenant-scoped JWT
+        uc := jwt.NewUserClaims(req.UserNkey)
+        uc.Audience = fmt.Sprintf("TENANT_%s", strings.ToUpper(tenantId))
+        uc.Sub.Allow.Add(fmt.Sprintf("tenant.%s.>", tenantId))
+        uc.Expires = time.Now().Unix() + 3600
+        
+        return uc.Encode(accountSigningKey)
+    }
+    
+    // Start the auth service
+    svc, _ := callout.NewAuthorizationService(
+        nc, callout.Authorizer(authorizer), callout.ResponseSignerKey(key))
+    svc.Start()
+}
+```
+
+**Wolverine Transport Configuration** (simple JWT + NKey pattern):
+```csharp
+public static void ConfigureWolverine(WolverineOptions opts, IConfiguration config)
+{
+    // Load tenant credentials from auth callout system (config, vault, etc.)
+    var natsConfig = config.GetSection("Nats").Get<NatsOptions>();
+    
+    var natsOpts = NatsOpts.Default with
+    {
+        Name = natsConfig.Name,  // e.g., "wolverine-tenant-acme"
+        AuthOpts = new NatsAuthOpts
+        {
+            Jwt = natsConfig.Jwt,           // Tenant-scoped JWT (from auth callout)
+            Seed = natsConfig.NKeySeed,     // User's NKey seed  
+            Token = natsConfig.ServiceToken // Optional: backend service token
+        },
+        TlsOpts = new NatsTlsOpts { Mode = TlsMode.Auto }
+    };
+    
+    opts.UseNats(natsOpts);
+    
+    // NATS enforces tenant permissions automatically!
+    // No manual tenant validation needed in our transport
+}
+
+// Configuration model (following proven pattern)
+public class NatsOptions
+{
+    public string Url { get; set; } = "nats://localhost:4222";
+    public string? Jwt { get; set; }           // From auth callout
+    public string? NKeySeed { get; set; }      // User private key
+    public string? ServiceToken { get; set; }  // Backend access
+    public string Name { get; set; } = "wolverine-nats";
+}
+```
+
+## Implementation Comparison
+
+| Approach | Security | Complexity | Performance | Use Case |
+|----------|----------|------------|-------------|----------|
+| **Subject-Based** | Good | Low | Excellent | Most applications |
+| **Account-Based** | Maximum | Medium | Excellent | Enterprise/Regulated |
+| **Auth Callout** | Maximum | Low (sidecar) | Good | Dynamic/External IAM |
+
+### Legacy Pattern: Subject-Based Isolation
 
 ```csharp
 public class SubjectIsolatedTransport : NatsTransport
