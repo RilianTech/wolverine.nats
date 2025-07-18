@@ -1,5 +1,5 @@
 using Wolverine.Configuration;
-using Wolverine.Nats.Internals;
+using Wolverine.Nats.Internal;
 
 namespace Wolverine.Nats.Configuration;
 
@@ -47,17 +47,15 @@ public class NatsListenerConfiguration
     /// Configure dead letter queue settings for this NATS listener
     /// </summary>
     public NatsListenerConfiguration ConfigureDeadLetterQueue(
-        Action<NatsDeadLetterConfiguration> configure
+        int maxDeliveryAttempts,
+        string? deadLetterSubject = null
     )
     {
-        var dlqConfig = new NatsDeadLetterConfiguration();
-        configure(dlqConfig);
-
         add(endpoint =>
         {
-            endpoint.DeadLetterQueueEnabled = dlqConfig.Enabled;
-            endpoint.DeadLetterSubject = dlqConfig.DeadLetterSubject;
-            endpoint.MaxDeliveryAttempts = dlqConfig.MaxDeliveryAttempts;
+            endpoint.DeadLetterQueueEnabled = true;
+            endpoint.DeadLetterSubject = deadLetterSubject;
+            endpoint.MaxDeliveryAttempts = maxDeliveryAttempts;
         });
 
         return this;

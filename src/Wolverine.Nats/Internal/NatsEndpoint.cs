@@ -8,7 +8,7 @@ using Wolverine.Runtime;
 using Wolverine.Transports;
 using Wolverine.Transports.Sending;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
 public class NatsEndpoint : Endpoint, IBrokerEndpoint
 {

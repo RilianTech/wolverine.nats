@@ -8,7 +8,7 @@ using Wolverine.Transports;
 using Wolverine.Transports.Sending;
 using Wolverine.Util.Dataflow;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
 public class NatsListener : IListener, ISupportDeadLetterQueue
 {

@@ -26,12 +26,8 @@ public class PingWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var ping = new Ping 
-            { 
-                Number = ++_pingNumber,
-                SentAt = DateTime.UtcNow
-            };
-            
+            var ping = new Ping { Number = ++_pingNumber, SentAt = DateTime.UtcNow };
+
             await _bus.PublishAsync(ping);
             _logger.LogInformation("Sent Ping #{Number} at {SentAt}", ping.Number, ping.SentAt);
 

@@ -8,17 +8,19 @@ using Wolverine.Nats.Configuration;
 using Wolverine.Runtime;
 using Wolverine.Transports;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
-public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
+public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
 {
+    public const string ProtocolName = "nats";
+
     private readonly LightweightCache<string, NatsEndpoint> _endpoints = new();
     private NatsConnection? _connection;
     private INatsJSContext? _jetStreamContext;
     private ILogger<NatsTransport>? _logger;
 
     public NatsTransport()
-        : base("nats", "NATS Transport")
+        : base(ProtocolName, "NATS Transport")
     {
         _endpoints.OnMissing = subject =>
         {
@@ -26,6 +28,11 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
             return new NatsEndpoint(normalized, this, EndpointRole.Application);
         };
     }
+
+    public Uri ResourceUri =>
+        Configuration.ConnectionString != null
+            ? new Uri(Configuration.ConnectionString)
+            : new Uri("nats://localhost:4222");
 
     public string ResponseSubject { get; private set; } = "wolverine.response";
 
@@ -51,7 +58,7 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         return _endpoints[ResponseSubject];
     }
 
-    public override async ValueTask InitializeAsync(IWolverineRuntime runtime)
+    public override async ValueTask ConnectAsync(IWolverineRuntime runtime)
     {
         _logger = runtime.LoggerFactory.CreateLogger<NatsTransport>();
 
@@ -62,7 +69,8 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         responseEndpoint.IsListener = true;
 
         // Initialize NATS connection
-        var natsOpts = BuildNatsOptions(runtime);
+        var natsOpts = Configuration.ToNatsOpts();
+        natsOpts = natsOpts with { Name = $"wolverine-{runtime.Options.ServiceName}" };
         _connection = new NatsConnection(natsOpts);
         await _connection.ConnectAsync();
 
@@ -71,66 +79,17 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         // Initialize JetStream context if enabled
         if (Configuration.EnableJetStream)
         {
-            var jsOpts = new NatsJSOpts(natsOpts, domain: Configuration.JetStreamDomain);
-            _jetStreamContext = new NatsJSContext(_connection, jsOpts);
+            _jetStreamContext = _connection.CreateJetStreamContext();
             _logger.LogInformation("JetStream context initialized");
-        }
-
-        // Compile all endpoints
-        foreach (var endpoint in _endpoints)
-        {
-            endpoint.Compile(runtime);
         }
     }
 
-    private NatsOpts BuildNatsOptions(IWolverineRuntime runtime)
+    public override IEnumerable<PropertyColumn> DiagnosticColumns()
     {
-        var opts = NatsOpts.Default with
-        {
-            Url = Configuration.ConnectionString,
-            Name = $"wolverine-{runtime.Options.ServiceName}",
-            ConnectTimeout = Configuration.ConnectTimeout,
-            RequestTimeout = Configuration.RequestTimeout,
-        };
-
-        // Configure authentication if provided
-        if (
-            !string.IsNullOrEmpty(Configuration.Username)
-            && !string.IsNullOrEmpty(Configuration.Password)
-        )
-        {
-            opts = opts with
-            {
-                AuthOpts = new NatsAuthOpts
-                {
-                    Username = Configuration.Username,
-                    Password = Configuration.Password
-                }
-            };
-        }
-        else if (!string.IsNullOrEmpty(Configuration.Token))
-        {
-            opts = opts with { AuthOpts = new NatsAuthOpts { Token = Configuration.Token } };
-        }
-        else if (!string.IsNullOrEmpty(Configuration.NKeyFile))
-        {
-            opts = opts with { AuthOpts = new NatsAuthOpts { NKey = Configuration.NKeyFile } };
-        }
-
-        // Configure TLS if enabled
-        if (Configuration.EnableTls)
-        {
-            opts = opts with
-            {
-                TlsOpts = new NatsTlsOpts
-                {
-                    Mode = Configuration.TlsInsecure ? TlsMode.Implicit : TlsMode.Require,
-                    InsecureSkipVerify = Configuration.TlsInsecure
-                }
-            };
-        }
-
-        return opts;
+        yield return new PropertyColumn("Subject", "header");
+        yield return new PropertyColumn("Queue Group", "header");
+        yield return new PropertyColumn("JetStream", "header");
+        yield return new PropertyColumn("Consumer Name");
     }
 
     public static string NormalizeSubject(string subject)

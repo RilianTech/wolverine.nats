@@ -10,17 +10,17 @@ public class PingHandler
     public async Task<Pong> Handle(Ping ping, ILogger<PingHandler> logger, IMessageContext context)
     {
         logger.LogInformation("Received Ping #{Number}", ping.Number);
-        
+
         var pong = new Pong
         {
             Number = ping.Number,
             ReceivedPingAt = ping.SentAt,
             SentAt = DateTime.UtcNow
         };
-        
+
         // Explicitly publish to the pongs subject
         await context.PublishAsync(pong);
-        
+
         return pong;
     }
 }

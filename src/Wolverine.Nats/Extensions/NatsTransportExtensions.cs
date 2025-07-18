@@ -2,7 +2,7 @@ using JasperFx.Core.Reflection;
 using Wolverine;
 using Wolverine.Configuration;
 using Wolverine.Nats.Configuration;
-using Wolverine.Nats.Internals;
+using Wolverine.Nats.Internal;
 
 namespace Wolverine.Nats;
 
@@ -19,22 +19,27 @@ public static class NatsTransportExtensions
     /// <summary>
     /// Configure Wolverine to use NATS as a message transport
     /// </summary>
-    public static void UseNats(
+    public static NatsTransportExpression UseNats(
         this WolverineOptions options,
         string connectionString = "nats://localhost:4222"
     )
     {
         var transport = options.NatsTransport();
         transport.Configuration.ConnectionString = connectionString;
+        return new NatsTransportExpression(transport, options);
     }
 
     /// <summary>
     /// Configure Wolverine to use NATS as a message transport with custom configuration
     /// </summary>
-    public static void UseNats(this WolverineOptions options, Action<NatsTransport> configure)
+    public static NatsTransportExpression UseNats(
+        this WolverineOptions options,
+        Action<NatsTransportConfiguration> configure
+    )
     {
         var transport = options.NatsTransport();
-        configure(transport);
+        configure(transport.Configuration);
+        return new NatsTransportExpression(transport, options);
     }
 
     /// <summary>

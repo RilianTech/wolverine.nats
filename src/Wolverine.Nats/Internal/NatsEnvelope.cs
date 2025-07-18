@@ -2,7 +2,7 @@ using NATS.Client.Core;
 using NATS.Client.JetStream;
 using Wolverine.Runtime;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
 public class NatsEnvelope : Envelope
 {

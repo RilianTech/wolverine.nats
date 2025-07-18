@@ -25,21 +25,17 @@ public class PingerService : IHostedService
 
         // Wait a bit for everything to spin up
         await Task.Delay(3000, cancellationToken);
-        
+
         _logger.LogInformation("Starting to send ping messages");
 
         await using var scope = _serviceProvider.CreateAsyncScope();
         var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-        
+
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                var message = new Ping
-                {
-                    Number = ++count,
-                    SentAt = DateTime.UtcNow
-                };
+                var message = new Ping { Number = ++count, SentAt = DateTime.UtcNow };
 
                 await bus.SendAsync(message);
                 _logger.LogInformation("Sent Ping #{Number}", message.Number);

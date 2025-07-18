@@ -79,6 +79,11 @@ public class NatsTransportConfiguration
     // === TLS Configuration ===
 
     /// <summary>
+    /// Enable TLS for connections
+    /// </summary>
+    public bool EnableTls { get; set; }
+
+    /// <summary>
     /// TLS mode (Auto, Prefer, Require, Disable)
     /// </summary>
     public TlsMode TlsMode { get; set; } = TlsMode.Auto;

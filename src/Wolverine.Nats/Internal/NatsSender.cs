@@ -4,7 +4,7 @@ using NATS.Net;
 using Wolverine.Runtime;
 using Wolverine.Transports.Sending;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
 public class NatsSender : ISender
 {

@@ -1,5 +1,5 @@
 using Wolverine.Configuration;
-using Wolverine.Nats.Internals;
+using Wolverine.Nats.Internal;
 
 namespace Wolverine.Nats.Configuration;
 

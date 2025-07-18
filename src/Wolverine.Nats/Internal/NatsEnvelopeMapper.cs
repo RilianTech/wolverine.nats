@@ -5,7 +5,7 @@ using NATS.Client.JetStream;
 using Wolverine.Runtime.Serialization;
 using Wolverine.Transports;
 
-namespace Wolverine.Nats.Internals;
+namespace Wolverine.Nats.Internal;
 
 public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 {
