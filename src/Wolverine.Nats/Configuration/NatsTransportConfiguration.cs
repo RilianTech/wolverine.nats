@@ -1,119 +1,235 @@
+using NATS.Client.Core;
+using NATS.Client.JetStream;
+using NATS.Client.JetStream.Models;
+
 namespace Wolverine.Nats.Configuration;
 
+/// <summary>
+/// Wolverine-focused NATS transport configuration supporting all NATS.Net auth methods
+/// </summary>
 public class NatsTransportConfiguration
 {
+    // === Core Connection Settings ===
+
     /// <summary>
-    /// NATS server connection string (default: nats://localhost:4222)
+    /// NATS server connection string - supports comma-separated URLs for clustering
     /// </summary>
     public string ConnectionString { get; set; } = "nats://localhost:4222";
 
     /// <summary>
-    /// Connection timeout
+    /// Client name for connection identification
+    /// </summary>
+    public string? ClientName { get; set; }
+
+    /// <summary>
+    /// Connection timeout for establishing NATS connection
     /// </summary>
     public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Request timeout for request/reply patterns
+    /// Request timeout for Wolverine's InvokeAsync pattern
     /// </summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
+    // === Authentication Methods (all NATS.Net auth patterns) ===
+
     /// <summary>
-    /// Username for authentication
+    /// Username for basic authentication
     /// </summary>
     public string? Username { get; set; }
 
     /// <summary>
-    /// Password for authentication
+    /// Password for basic authentication
     /// </summary>
     public string? Password { get; set; }
 
     /// <summary>
-    /// Token for authentication
+    /// Token authentication
     /// </summary>
     public string? Token { get; set; }
 
     /// <summary>
-    /// NKey file path for authentication
-    /// </summary>
-    public string? NKeyFile { get; set; }
-
-    /// <summary>
-    /// JWT for authentication
+    /// JWT for JWT authentication (auth callout pattern)
     /// </summary>
     public string? Jwt { get; set; }
 
     /// <summary>
-    /// NKey seed for JWT authentication
+    /// NKey seed for JWT/NKey authentication
     /// </summary>
     public string? NKeySeed { get; set; }
 
     /// <summary>
-    /// Enable TLS
+    /// Path to NATS credentials file (.creds)
     /// </summary>
-    public bool EnableTls { get; set; }
+    public string? CredentialsFile { get; set; }
+
+    // Note: Raw credentials content is not directly supported in NatsAuthOpts
+    // Use CredentialsFile instead
 
     /// <summary>
-    /// Skip TLS certificate verification (for development only)
+    /// Path to NKey file
+    /// </summary>
+    public string? NKeyFile { get; set; }
+
+    /// <summary>
+    /// Dynamic authentication callback for advanced scenarios
+    /// </summary>
+    public Func<Uri, CancellationToken, ValueTask<NatsAuthCred>>? AuthCallback { get; set; }
+
+    // === TLS Configuration ===
+
+    /// <summary>
+    /// TLS mode (Auto, Prefer, Require, Disable)
+    /// </summary>
+    public TlsMode TlsMode { get; set; } = TlsMode.Auto;
+
+    /// <summary>
+    /// Skip TLS certificate verification (development only)
     /// </summary>
     public bool TlsInsecure { get; set; }
 
     /// <summary>
-    /// Client certificate path for mutual TLS
+    /// Client certificate file for mutual TLS
     /// </summary>
-    public string? ClientCertPath { get; set; }
+    public string? ClientCertFile { get; set; }
 
     /// <summary>
-    /// Client certificate key path for mutual TLS
+    /// Client key file for mutual TLS
     /// </summary>
-    public string? ClientKeyPath { get; set; }
+    public string? ClientKeyFile { get; set; }
 
     /// <summary>
-    /// Whether to automatically provision JetStream resources (streams, consumers)
+    /// CA certificate file for custom CA
     /// </summary>
-    public bool AutoProvision { get; set; }
+    public string? CaFile { get; set; }
+
+    // === JetStream Configuration ===
 
     /// <summary>
-    /// Whether to automatically purge streams on startup (for development)
-    /// </summary>
-    public bool AutoPurgeOnStartup { get; set; }
-
-    /// <summary>
-    /// Whether to enable JetStream support
+    /// Enable JetStream for durable messaging
     /// </summary>
     public bool EnableJetStream { get; set; } = true;
 
     /// <summary>
-    /// JetStream domain to connect to (optional)
+    /// JetStream domain for multi-tenancy
     /// </summary>
     public string? JetStreamDomain { get; set; }
 
     /// <summary>
+    /// JetStream API prefix (default: $JS.API)
+    /// </summary>
+    public string? JetStreamApiPrefix { get; set; }
+
+    // === Wolverine Transport Settings ===
+
+    /// <summary>
+    /// Whether to automatically provision JetStream resources
+    /// </summary>
+    public bool AutoProvision { get; set; } = true;
+
+    /// <summary>
+    /// Default queue group for load balancing
+    /// </summary>
+    public string? DefaultQueueGroup { get; set; }
+
+    /// <summary>
+    /// Whether to normalize subjects (replace '/' with '.')
+    /// </summary>
+    public bool NormalizeSubjects { get; set; } = true;
+
+    /// <summary>
     /// Default stream configuration for auto-provisioning
     /// </summary>
-    public JetStreamConfiguration JetStream { get; set; } = new();
+    public JetStreamDefaults JetStreamDefaults { get; set; } = new();
+
+    // === Multi-Tenancy Extension Points (optional) ===
+
+    /// <summary>
+    /// Optional: Custom tenant ID resolver for multi-tenancy scenarios
+    /// </summary>
+    public ITenantIdResolver? TenantIdResolver { get; set; }
+
+    /// <summary>
+    /// Optional: Custom subject resolver for tenant-aware routing
+    /// </summary>
+    public ISubjectResolver? SubjectResolver { get; set; }
+
+    /// <summary>
+    /// Subject prefix template for tenant isolation (e.g., "tenant.{tenantId}")
+    /// </summary>
+    public string? TenantSubjectPrefix { get; set; }
+
+    /// <summary>
+    /// Build NatsOpts from this configuration for creating NATS client
+    /// </summary>
+    internal NatsOpts ToNatsOpts()
+    {
+        return NatsOpts.Default with
+        {
+            Url = ConnectionString,
+            Name = ClientName ?? "wolverine-nats",
+            ConnectTimeout = ConnectTimeout,
+            CommandTimeout = RequestTimeout,
+            AuthOpts = new NatsAuthOpts
+            {
+                Username = Username,
+                Password = Password,
+                Token = Token,
+                Jwt = Jwt,
+                Seed = NKeySeed,
+                CredsFile = CredentialsFile,
+                NKeyFile = NKeyFile,
+                AuthCredCallback = AuthCallback
+            },
+            TlsOpts = new NatsTlsOpts
+            {
+                Mode = TlsMode,
+                InsecureSkipVerify = TlsInsecure,
+                CertFile = ClientCertFile,
+                KeyFile = ClientKeyFile,
+                CaFile = CaFile
+            }
+        };
+    }
+
+    /// <summary>
+    /// Build NatsJSOpts from this configuration for JetStream
+    /// </summary>
+    internal NatsJSOpts? ToJetStreamOpts()
+    {
+        if (!EnableJetStream)
+            return null;
+
+        // NatsJSOpts constructor requires NatsOpts
+        // Domain and ApiPrefix are set via constructor parameters
+        return new NatsJSOpts(ToNatsOpts(), JetStreamDomain, JetStreamApiPrefix ?? "$JS.API");
+    }
 }
 
-public class JetStreamConfiguration
+/// <summary>
+/// JetStream defaults for Wolverine transport
+/// </summary>
+public class JetStreamDefaults
 {
     /// <summary>
-    /// Default retention policy for streams
+    /// Default retention policy for streams (limits, workqueue)
     /// </summary>
-    public string Retention { get; set; } = "limits";
+    public string Retention { get; set; } = "limits"; // "limits" or "workqueue"
 
     /// <summary>
     /// Default maximum age for messages
     /// </summary>
-    public TimeSpan? MaxAge { get; set; }
+    public TimeSpan? MaxAge { get; set; } = TimeSpan.FromDays(7);
 
     /// <summary>
     /// Default maximum number of messages per stream
     /// </summary>
-    public long? MaxMessages { get; set; }
+    public long? MaxMessages { get; set; } = 1_000_000;
 
     /// <summary>
     /// Default maximum size of stream in bytes
     /// </summary>
-    public long? MaxBytes { get; set; }
+    public long? MaxBytes { get; set; } = 1024 * 1024 * 1024; // 1GB
 
     /// <summary>
     /// Default number of replicas for streams
@@ -123,7 +239,7 @@ public class JetStreamConfiguration
     /// <summary>
     /// Default acknowledgment policy for consumers
     /// </summary>
-    public string AckPolicy { get; set; } = "explicit";
+    public string AckPolicy { get; set; } = "explicit"; // "explicit", "none", "all"
 
     /// <summary>
     /// Default acknowledgment wait time
@@ -134,4 +250,36 @@ public class JetStreamConfiguration
     /// Default maximum delivery attempts
     /// </summary>
     public int MaxDeliver { get; set; } = 3;
+
+    /// <summary>
+    /// Default duplicate window for deduplication
+    /// </summary>
+    public TimeSpan DuplicateWindow { get; set; } = TimeSpan.FromMinutes(2);
+}
+
+/// <summary>
+/// Optional extension interface for tenant ID resolution
+/// </summary>
+public interface ITenantIdResolver
+{
+    /// <summary>
+    /// Resolve tenant ID from envelope (Wolverine context)
+    /// </summary>
+    string? ResolveTenantId(Envelope envelope);
+}
+
+/// <summary>
+/// Optional extension interface for custom subject resolution
+/// </summary>
+public interface ISubjectResolver
+{
+    /// <summary>
+    /// Resolve subject for outgoing messages with tenant context
+    /// </summary>
+    string ResolveSubject(string baseSubject, Envelope envelope);
+
+    /// <summary>
+    /// Extract tenant context from incoming subject
+    /// </summary>
+    string? ExtractTenantId(string subject);
 }
