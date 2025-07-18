@@ -68,21 +68,65 @@ public class NatsSender : ISender
 
             var data = envelope.Data ?? Array.Empty<byte>();
 
-            if (_logger.IsEnabled(LogLevel.Debug))
+            // Determine the target subject and reply-to
+            var targetSubject = _endpoint.Subject;
+            string? replyTo = null;
+
+            // Handle special case for reply messages
+            if (envelope.IsResponse && envelope.ReplyUri != null)
             {
-                _logger.LogDebug(
-                    "Sending message {MessageId} to NATS subject {Subject}",
-                    envelope.Id,
-                    _endpoint.Subject
-                );
+                // This is a reply message, send directly to the reply subject
+                targetSubject = NatsTransport.ExtractSubjectFromUri(envelope.ReplyUri);
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        "Sending reply message {MessageId} to reply subject {ReplySubject}",
+                        envelope.Id,
+                        targetSubject
+                    );
+                }
+            }
+            else
+            {
+                // This is a request message, set reply-to if available
+                if (envelope.ReplyUri != null)
+                {
+                    replyTo = NatsTransport.ExtractSubjectFromUri(envelope.ReplyUri);
+
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug(
+                            "Sending request message {MessageId} to NATS subject {Subject} with reply-to {ReplyTo}",
+                            envelope.Id,
+                            targetSubject,
+                            replyTo
+                        );
+                    }
+                }
+                else
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug(
+                            "Sending message {MessageId} to NATS subject {Subject}",
+                            envelope.Id,
+                            targetSubject
+                        );
+                    }
+                }
             }
 
-            if (_endpoint.UseJetStream && !string.IsNullOrEmpty(_endpoint.StreamName))
+            if (
+                _endpoint.UseJetStream
+                && !string.IsNullOrEmpty(_endpoint.StreamName)
+                && !envelope.IsResponse
+            )
             {
-                // Use JetStream for publishing
+                // Use JetStream for publishing (but not for replies)
                 var js = _connection.CreateJetStreamContext();
                 var ack = await js.PublishAsync(
-                    _endpoint.Subject,
+                    targetSubject,
                     data,
                     headers: headers,
                     cancellationToken: _cancellation
@@ -99,11 +143,12 @@ public class NatsSender : ISender
             }
             else
             {
-                // Use Core NATS for publishing
+                // Use Core NATS for publishing (replies should always use Core NATS)
                 await _connection.PublishAsync(
-                    _endpoint.Subject,
+                    targetSubject,
                     data,
-                    headers: headers,
+                    headers,
+                    replyTo,
                     cancellationToken: _cancellation
                 );
             }

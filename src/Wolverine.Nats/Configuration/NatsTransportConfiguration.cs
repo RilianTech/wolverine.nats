@@ -76,12 +76,12 @@ public class NatsTransportConfiguration
     /// Whether to automatically purge streams on startup (for development)
     /// </summary>
     public bool AutoPurgeOnStartup { get; set; }
-    
+
     /// <summary>
     /// Whether to enable JetStream support
     /// </summary>
     public bool EnableJetStream { get; set; } = true;
-    
+
     /// <summary>
     /// JetStream domain to connect to (optional)
     /// </summary>

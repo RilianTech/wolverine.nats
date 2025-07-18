@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Primitives;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
+using Wolverine.Runtime.Serialization;
 using Wolverine.Transports;
 
 namespace Wolverine.Nats.Internals;
@@ -46,6 +47,16 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 
         // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://{incoming.Subject}");
+
+        // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
+        if (!string.IsNullOrEmpty(incoming.ReplyTo))
+        {
+            EnvelopeSerializer.ReadDataElement(
+                envelope,
+                EnvelopeConstants.ReplyUriKey,
+                $"nats://{incoming.ReplyTo}"
+            );
+        }
 
         // Copy any additional headers that aren't reserved
         if (incoming.Headers != null)
@@ -103,6 +114,16 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
 
         // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://{incoming.Subject}");
+
+        // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
+        if (!string.IsNullOrEmpty(incoming.ReplyTo))
+        {
+            EnvelopeSerializer.ReadDataElement(
+                envelope,
+                EnvelopeConstants.ReplyUriKey,
+                $"nats://{incoming.ReplyTo}"
+            );
+        }
 
         // Store JetStream metadata in envelope headers for potential use
         if (incoming.Metadata != null)

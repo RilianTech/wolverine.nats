@@ -1,16 +1,18 @@
 # Wolverine.Nats
 
-NATS transport support for the Wolverine messaging framework.
+NATS transport support for the Wolverine messaging framework, enabling high-performance messaging with both Core NATS and JetStream.
 
 ## Features
 
-- **Core NATS** messaging support with subject-based routing
-- **JetStream** support for reliable, persistent messaging
-- **Queue Groups** for load balancing across multiple consumers
+- **Core NATS** messaging support with subject-based routing and at-most-once delivery
+- **JetStream** support for reliable, persistent messaging with at-least-once delivery
+- **Queue Groups** for load balancing across multiple consumers  
+- **Dead Letter Queue** support with configurable retry policies
 - **Authentication** support (username/password, token, NKey, JWT)
 - **TLS** support including mutual TLS
-- Request/Reply pattern support
-- Auto-provisioning of JetStream resources
+- **MQTT Gateway Integration** - Connect MQTT devices through NATS server's MQTT gateway
+- **Stream Management** - Automatic JetStream stream and consumer creation
+- **IBrokerEndpoint** compliance for proper resource lifecycle management
 
 ## Installation
 
@@ -34,20 +36,18 @@ using var host = Host.CreateDefaultBuilder()
             .ToNatsSubject("orders.placed");
 
         // Listen to messages from a subject
-        opts.ListenToNatsSubject("orders.*")
-            .DefaultIncomingMessage<OrderMessage>();
+        opts.ListenToNatsSubject("orders.placed");
     })
     .Build();
 ```
 
-### Using JetStream
+### Using JetStream for Durability
 
 ```csharp
 using var host = Host.CreateDefaultBuilder()
     .UseWolverine(opts =>
     {
-        opts.UseNats("nats://localhost:4222")
-            .AutoProvision(); // Auto-create streams and consumers
+        opts.UseNats("nats://localhost:4222");
 
         // Publish to JetStream
         opts.PublishMessage<OrderPlaced>()
@@ -55,9 +55,8 @@ using var host = Host.CreateDefaultBuilder()
             .UseJetStream("ORDERS");
 
         // Listen with JetStream consumer
-        opts.ListenToNatsSubject("orders.*")
-            .UseJetStream("ORDERS", "order-processor")
-            .DefaultIncomingMessage<OrderMessage>();
+        opts.ListenToNatsSubject("orders.placed")
+            .UseJetStream("ORDERS", "order-processor");
     })
     .Build();
 ```
@@ -65,57 +64,75 @@ using var host = Host.CreateDefaultBuilder()
 ### Queue Groups (Load Balancing)
 
 ```csharp
-opts.ListenToNatsSubject("orders.*")
-    .WithQueueGroup("order-processors")
-    .DefaultIncomingMessage<OrderMessage>();
+opts.ListenToNatsSubject("orders.placed")
+    .UseQueueGroup("order-processors");
+```
+
+### Dead Letter Queue Configuration
+
+```csharp
+opts.ListenToNatsSubject("orders.placed")
+    .UseJetStream("ORDERS", "order-processor")
+    .ConfigureDeadLetterQueue(dlq =>
+    {
+        dlq.MaxDeliveryAttempts = 3;
+        dlq.DeadLetterSubject = "orders.dlq";
+    });
+
+// Disable DLQ
+opts.ListenToNatsSubject("notifications.send")
+    .UseJetStream()
+    .DisableDeadLetterQueueing();
+
+// Simple dead letter subject
+opts.ListenToNatsSubject("payments.process")
+    .UseJetStream()
+    .DeadLetterTo("payments.errors");
+```
+
+### MQTT Gateway Integration
+
+```csharp
+// Connect MQTT devices through NATS MQTT gateway
+opts.UseNats("nats://localhost:4222"); // NATS server with MQTT gateway enabled
+
+// MQTT devices publish to "sensors/temperature" 
+// Wolverine receives on "sensors.temperature"
+opts.ListenToNatsSubject("sensors.temperature");
+
+// Wolverine publishes to "commands.device.123"
+// MQTT devices receive on "commands/device/123"
+opts.PublishMessage<DeviceCommand>()
+    .ToNatsSubject("commands.device.{DeviceId}");
 ```
 
 ### Authentication
 
 ```csharp
-// Username/Password
-opts.UseNats("nats://localhost:4222")
-    .WithAuthentication("user", "password");
-
-// Token
-opts.UseNats("nats://localhost:4222")
-    .WithToken("my-auth-token");
-
-// NKey
-opts.UseNats("nats://localhost:4222")
-    .WithNKey("/path/to/nkey/file");
-
-// JWT
-opts.UseNats("nats://localhost:4222")
-    .WithJWT("jwt-token", "nkey-seed");
+// Configure via transport configuration
+opts.UseNats(transport =>
+{
+    transport.Configuration.ConnectionString = "nats://localhost:4222";
+    transport.Configuration.Username = "user";
+    transport.Configuration.Password = "password";
+    
+    // Or use token
+    transport.Configuration.Token = "my-auth-token";
+    
+    // Or use NKey file
+    transport.Configuration.NKeyFile = "/path/to/nkey/file";
+});
 ```
 
-### TLS
+### TLS Configuration
 
 ```csharp
-// Enable TLS
-opts.UseNats("nats://localhost:4222")
-    .WithTls();
-
-// Mutual TLS
-opts.UseNats("nats://localhost:4222")
-    .WithMutualTls("/path/to/client.crt", "/path/to/client.key");
-```
-
-### Advanced JetStream Configuration
-
-```csharp
-opts.UseNats("nats://localhost:4222")
-    .AutoProvision()
-    .ConfigureJetStream(js =>
-    {
-        js.Retention = "limits";
-        js.MaxAge = TimeSpan.FromDays(7);
-        js.MaxMessages = 1000000;
-        js.Replicas = 3;
-        js.AckWait = TimeSpan.FromMinutes(5);
-        js.MaxDeliver = 5;
-    });
+opts.UseNats(transport =>
+{
+    transport.Configuration.ConnectionString = "nats://localhost:4222";
+    transport.Configuration.EnableTls = true;
+    transport.Configuration.TlsInsecure = false; // For development only
+});
 ```
 
 ## Message Patterns
@@ -139,18 +156,11 @@ public class OrderPlacedHandler
 
 ### Request/Reply
 
-```csharp
-// Send request and wait for reply
-var response = await bus.InvokeAsync<OrderStatus>(new GetOrderStatus { OrderId = 123 });
+> **Note**: Request/Reply pattern implementation is planned for a future release.
 
-// Handler
-public class GetOrderStatusHandler
-{
-    public OrderStatus Handle(GetOrderStatus query)
-    {
-        return new OrderStatus { OrderId = query.OrderId, Status = "Shipped" };
-    }
-}
+```csharp
+// Will be supported in future version
+var response = await bus.InvokeAsync<OrderStatus>(new GetOrderStatus { OrderId = 123 });
 ```
 
 ## Integration with Existing NATS Infrastructure
@@ -158,37 +168,124 @@ public class GetOrderStatusHandler
 The transport maps Wolverine concepts to NATS:
 
 - Wolverine **endpoints** map to NATS **subjects**
-- Wolverine **queue groups** map to NATS **queue groups**
-- Wolverine **message types** are sent as headers
+- Wolverine **queue groups** map to NATS **queue groups**  
+- Wolverine **message types** are preserved in NATS headers
 - Supports both Core NATS (at-most-once) and JetStream (at-least-once)
+- **MQTT Gateway** - Seamlessly integrate MQTT devices through NATS MQTT gateway
+- **Stream Management** - Automatic JetStream stream and consumer lifecycle
+
+### NATS Subject Conventions
+
+```csharp
+// Core NATS subjects
+"orders.placed"     // Simple subject
+"orders.*.status"   // Single-level wildcard  
+"orders.>"          // Multi-level wildcard
+
+// JetStream with automatic stream creation
+"ORDERS.placed"     // Stream: ORDERS, Subject: ORDERS.placed
+```
 
 ## Configuration Options
 
-### Transport Configuration
+### Transport Configuration (`NatsTransportConfiguration`)
 
-- `ConnectionString`: NATS server URL (default: `nats://localhost:4222`)
-- `ConnectTimeout`: Connection timeout (default: 10 seconds)
-- `RequestTimeout`: Request/Reply timeout (default: 30 seconds)
-- `EnableTls`: Enable TLS connection
-- `AutoProvision`: Auto-create JetStream resources
-- `AutoPurgeOnStartup`: Purge streams on startup (development only)
+| Property | Description | Default |
+|----------|-------------|---------|
+| `ConnectionString` | NATS server URL | `nats://localhost:4222` |
+| `ConnectTimeout` | Connection timeout | 10 seconds |
+| `RequestTimeout` | Request/Reply timeout | 30 seconds |  
+| `Username` | Authentication username | null |
+| `Password` | Authentication password | null |
+| `Token` | Authentication token | null |
+| `NKeyFile` | NKey file path | null |
+| `EnableTls` | Enable TLS connection | false |
+| `TlsInsecure` | Skip TLS verification (dev only) | false |
+| `EnableJetStream` | Enable JetStream globally | false |
+| `JetStreamDomain` | JetStream domain | null |
 
-### Endpoint Configuration
+### Endpoint Configuration  
 
-- `UseJetStream`: Enable JetStream for the endpoint
-- `StreamName`: JetStream stream name
-- `ConsumerName`: JetStream consumer name (durable)
-- `QueueGroup`: Queue group for load balancing
-- `CustomHeaders`: Additional headers to include
+| Method | Description |
+|--------|-------------|
+| `UseJetStream(streamName, consumerName)` | Enable JetStream for durable messaging |
+| `UseQueueGroup(groupName)` | Enable load balancing across consumers |
+| `ConfigureDeadLetterQueue(config)` | Configure retry and DLQ behavior |
+| `DisableDeadLetterQueueing()` | Disable dead letter queue handling |
+| `DeadLetterTo(subject)` | Set dead letter subject |
 
-## Development
+### Dead Letter Queue Configuration (`NatsDeadLetterConfiguration`)
 
-This transport is designed to work seamlessly with Wolverine's programming model while leveraging NATS features:
+| Property | Description | Default |
+|----------|-------------|---------|
+| `Enabled` | Enable DLQ support | true |
+| `MaxDeliveryAttempts` | Max retries before DLQ | 5 |
+| `DeadLetterSubject` | Subject for dead letter messages | null |
 
-- Automatic serialization/deserialization
-- Error handling and retries
-- Message correlation and routing
-- Integration with Wolverine's durability features
+## Getting Started
+
+### Running NATS Server
+
+For development and testing, use the provided Docker Compose setup:
+
+```bash
+# Start NATS server with JetStream
+docker compose up -d
+
+# Check if NATS is running
+docker compose logs wolverine-nats-test
+
+# Access monitoring at http://localhost:8223
+```
+
+### Testing with Sample Applications
+
+```bash
+# Terminal 1 - Start the Ponger (receives messages)
+cd samples/PingPongWithNats/Ponger
+dotnet run
+
+# Terminal 2 - Start the Pinger (sends messages)
+cd samples/PingPongWithNats/Pinger
+dotnet run
+```
+
+## Current Implementation Status
+
+### ✅ Completed Features
+- **Core NATS Transport** - Full pub/sub messaging support
+- **JetStream Integration** - Durable messaging with stream management
+- **Dead Letter Queue** - Configurable retry and error handling
+- **Queue Groups** - Load balancing across consumers
+- **Stream Lifecycle** - Automatic stream and consumer management
+- **Authentication & TLS** - Multiple authentication methods
+- **MQTT Gateway Ready** - Works with NATS MQTT gateway out-of-the-box
+
+### 🚧 Planned Features
+- **Request/Reply Pattern** - `InvokeAsync<T>` support using NATS inbox
+- **Multi-Tenancy** - Account-based isolation (future consideration)
+
+## Architecture
+
+This transport follows Wolverine's standard transport patterns:
+
+- **`NatsTransport`** - Main transport implementation
+- **`NatsEndpoint`** - Endpoint with `IBrokerEndpoint` support
+- **`NatsListener`** - Message listener with `ISupportDeadLetterQueue`
+- **`NatsSender`** - Message publisher
+- **`NatsEnvelopeMapper`** - Envelope ↔ NATS message mapping
+- **Configuration Classes** - Strongly-typed configuration with fluent API
+
+### Message Flow
+
+```
+Wolverine Message → NatsEnvelopeMapper → NATS Message → Network
+Network → NATS Message → NatsEnvelopeMapper → Wolverine Message
+```
+
+## Contributing
+
+This transport is part of the Wolverine ecosystem. For issues and contributions, please follow the main Wolverine project guidelines.
 
 ## License
 
