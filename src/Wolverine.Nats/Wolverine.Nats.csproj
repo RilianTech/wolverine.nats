@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Most properties inherited from Directory.Build.props -->
+    <RootNamespace>Wolverine.Nats</RootNamespace>
+    <AssemblyName>Wolverine.Nats</AssemblyName>
+    
+    <!-- NuGet package metadata -->
+    <PackageId>Wolverine.Nats</PackageId>
+    <Description>NATS transport support for the Wolverine messaging framework. Provides both Core NATS and JetStream support with full integration of Wolverine's durability, error handling, and messaging patterns.</Description>
+    <PackageTags>wolverine;messaging;nats;jetstream;transport;microservices;distributed</PackageTags>
+    <PackageProjectUrl>https://github.com/yourusername/Wolverine.Nats</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- <PackageIcon>icon.png</PackageIcon> -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/yourusername/Wolverine.Nats</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Enable package generation -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" Version="3.4.0" />
+    <PackageReference Include="NATS.Net" Version="2.5.7" />
+    <PackageReference Include="JasperFx.Core" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
+  </ItemGroup>
+
+</Project>

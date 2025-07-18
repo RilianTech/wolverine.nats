@@ -1,0 +1,54 @@
+# Uncomment this entire file when ready to publish releases to NuGet
+# 
+# name: Release
+# 
+# on:
+#   release:
+#     types: [published]
+# 
+# env:
+#   DOTNET_VERSION: '8.0.x'
+#   DOTNET_NOLOGO: true
+#   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+#   DOTNET_CLI_TELEMETRY_OPTOUT: true
+# 
+# jobs:
+#   release:
+#     runs-on: ubuntu-latest
+#     
+#     steps:
+#     - uses: actions/checkout@v4
+#       with:
+#         fetch-depth: 0
+#     
+#     - name: Setup .NET
+#       uses: actions/setup-dotnet@v4
+#       with:
+#         dotnet-version: ${{ env.DOTNET_VERSION }}
+#     
+#     - name: Restore dependencies
+#       run: dotnet restore
+#     
+#     - name: Build
+#       run: dotnet build --configuration Release --no-restore
+#     
+#     - name: Test
+#       run: dotnet test --configuration Release --no-build --verbosity normal
+#     
+#     - name: Pack
+#       run: |
+#         VERSION="${{ github.event.release.tag_name }}"
+#         VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+#         dotnet pack --configuration Release --no-build --output ./artifacts -p:PackageVersion=$VERSION
+#     
+#     - name: Push to NuGet
+#       run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+#       env:
+#         NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+#     
+#     - name: Upload packages to release
+#       uses: softprops/action-gh-release@v1
+#       with:
+#         files: ./artifacts/*
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
