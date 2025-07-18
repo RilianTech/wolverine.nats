@@ -28,35 +28,55 @@ dotnet add package Wolverine.Nats
 using var host = Host.CreateDefaultBuilder()
     .UseWolverine(opts =>
     {
-        // Connect to NATS
-        opts.UseNats("nats://localhost:4222");
+        // Connect to NATS with fluent configuration
+        opts.UseNats("nats://localhost:4222")
+            .AutoProvision()  // Auto-create streams and consumers
+            .UseJetStream(js =>
+            {
+                js.MaxMessages = 100_000;
+                js.MaxAge = TimeSpan.FromDays(7);
+            });
 
         // Publish messages to a subject
         opts.PublishMessage<OrderPlaced>()
             .ToNatsSubject("orders.placed");
 
         // Listen to messages from a subject
-        opts.ListenToNatsSubject("orders.placed");
+        opts.ListenToNatsSubject("orders.placed")
+            .ProcessInline();
     })
     .Build();
 ```
 
-### Using JetStream for Durability
+### Advanced Configuration with Fluent API
 
 ```csharp
 using var host = Host.CreateDefaultBuilder()
     .UseWolverine(opts =>
     {
-        opts.UseNats("nats://localhost:4222");
+        // Configure NATS with all options
+        opts.UseNats("nats://localhost:4222")
+            .AutoProvision()
+            .WithSubjectPrefix("myapp")  // Prefix all subjects
+            .WithCredentials("user", "password")
+            .UseTls()
+            .ConfigureTimeouts(
+                connectTimeout: TimeSpan.FromSeconds(5),
+                requestTimeout: TimeSpan.FromSeconds(30)
+            )
+            .UseJetStream(js =>
+            {
+                js.Retention = "workqueue";
+                js.MaxMessages = 1_000_000;
+                js.AckWait = TimeSpan.FromMinutes(1);
+            });
 
-        // Publish to JetStream
-        opts.PublishMessage<OrderPlaced>()
-            .ToNatsSubject("orders.placed")
-            .UseJetStream("ORDERS");
-
-        // Listen with JetStream consumer
+        // Configure endpoints
         opts.ListenToNatsSubject("orders.placed")
-            .UseJetStream("ORDERS", "order-processor");
+            .UseJetStream("ORDERS", "order-processor")
+            .UseQueueGroup("order-processors")
+            .ProcessInline()
+            .ConfigureDeadLetterQueue(3, "orders.dlq");
     })
     .Build();
 ```
@@ -71,23 +91,20 @@ opts.ListenToNatsSubject("orders.placed")
 ### Dead Letter Queue Configuration
 
 ```csharp
+// Configure with max attempts and dead letter subject
 opts.ListenToNatsSubject("orders.placed")
     .UseJetStream("ORDERS", "order-processor")
-    .ConfigureDeadLetterQueue(dlq =>
-    {
-        dlq.MaxDeliveryAttempts = 3;
-        dlq.DeadLetterSubject = "orders.dlq";
-    });
+    .ConfigureDeadLetterQueue(3, "orders.dlq");
+
+// Just set the dead letter subject
+opts.ListenToNatsSubject("payments.process")
+    .UseJetStream()
+    .DeadLetterTo("payments.errors");
 
 // Disable DLQ
 opts.ListenToNatsSubject("notifications.send")
     .UseJetStream()
     .DisableDeadLetterQueueing();
-
-// Simple dead letter subject
-opts.ListenToNatsSubject("payments.process")
-    .UseJetStream()
-    .DeadLetterTo("payments.errors");
 ```
 
 ### MQTT Gateway Integration
@@ -109,29 +126,47 @@ opts.PublishMessage<DeviceCommand>()
 ### Authentication
 
 ```csharp
-// Configure via transport configuration
-opts.UseNats(transport =>
+// Username/Password
+opts.UseNats("nats://localhost:4222")
+    .WithCredentials("user", "password");
+
+// Token
+opts.UseNats("nats://localhost:4222")
+    .WithToken("my-auth-token");
+
+// NKey
+opts.UseNats("nats://localhost:4222")
+    .WithNKey("/path/to/nkey/file");
+
+// Advanced configuration
+opts.UseNats(config =>
 {
-    transport.Configuration.ConnectionString = "nats://localhost:4222";
-    transport.Configuration.Username = "user";
-    transport.Configuration.Password = "password";
-    
-    // Or use token
-    transport.Configuration.Token = "my-auth-token";
-    
-    // Or use NKey file
-    transport.Configuration.NKeyFile = "/path/to/nkey/file";
+    config.ConnectionString = "nats://localhost:4222";
+    config.CredentialsFile = "/path/to/.creds";
+    config.Jwt = "my-jwt-token";
+    config.NKeySeed = "my-nkey-seed";
 });
 ```
 
 ### TLS Configuration
 
 ```csharp
-opts.UseNats(transport =>
+// Basic TLS
+opts.UseNats("nats://localhost:4222")
+    .UseTls();
+
+// TLS with insecure skip verify (development only)
+opts.UseNats("nats://localhost:4222")
+    .UseTls(insecureSkipVerify: true);
+
+// Advanced TLS configuration
+opts.UseNats(config =>
 {
-    transport.Configuration.ConnectionString = "nats://localhost:4222";
-    transport.Configuration.EnableTls = true;
-    transport.Configuration.TlsInsecure = false; // For development only
+    config.ConnectionString = "nats://localhost:4222";
+    config.EnableTls = true;
+    config.ClientCertFile = "/path/to/client.crt";
+    config.ClientKeyFile = "/path/to/client.key";
+    config.CaFile = "/path/to/ca.crt";
 });
 ```
 
@@ -214,13 +249,15 @@ The transport maps Wolverine concepts to NATS:
 | `DisableDeadLetterQueueing()` | Disable dead letter queue handling |
 | `DeadLetterTo(subject)` | Set dead letter subject |
 
-### Dead Letter Queue Configuration (`NatsDeadLetterConfiguration`)
+### Dead Letter Queue Configuration
 
-| Property | Description | Default |
-|----------|-------------|---------|
-| `Enabled` | Enable DLQ support | true |
-| `MaxDeliveryAttempts` | Max retries before DLQ | 5 |
-| `DeadLetterSubject` | Subject for dead letter messages | null |
+Dead letter queue configuration is now directly on endpoints:
+
+| Method | Description |
+|--------|-------------|
+| `ConfigureDeadLetterQueue(maxAttempts, dlqSubject)` | Configure DLQ with retry count |
+| `DeadLetterTo(subject)` | Set dead letter subject |
+| `DisableDeadLetterQueueing()` | Disable DLQ handling |
 
 ## Getting Started
 
@@ -269,12 +306,15 @@ dotnet run
 
 This transport follows Wolverine's standard transport patterns:
 
-- **`NatsTransport`** - Main transport implementation
+- **`NatsTransport`** - Main transport inheriting from `BrokerTransport<NatsEndpoint>`
+- **`NatsTransportExpression`** - Fluent configuration API following Wolverine patterns
 - **`NatsEndpoint`** - Endpoint with `IBrokerEndpoint` support
 - **`NatsListener`** - Message listener with `ISupportDeadLetterQueue`
 - **`NatsSender`** - Message publisher
 - **`NatsEnvelopeMapper`** - Envelope ↔ NATS message mapping
 - **Configuration Classes** - Strongly-typed configuration with fluent API
+
+All classes follow Wolverine's naming conventions and are located in the `Internal` namespace.
 
 ### Message Flow
 
