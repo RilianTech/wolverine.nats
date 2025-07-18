@@ -17,7 +17,8 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
     private INatsJSContext? _jetStreamContext;
     private ILogger<NatsTransport>? _logger;
 
-    public NatsTransport() : base("nats", "NATS Transport")
+    public NatsTransport()
+        : base("nats", "NATS Transport")
     {
         _endpoints.OnMissing = subject =>
         {
@@ -27,12 +28,15 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
     }
 
     public string ResponseSubject { get; private set; } = "wolverine.response";
-    
+
     public NatsTransportConfiguration Configuration { get; } = new();
 
-    public NatsConnection Connection => _connection ?? throw new InvalidOperationException("NATS connection not initialized");
-    
-    public INatsJSContext JetStreamContext => _jetStreamContext ?? throw new InvalidOperationException("JetStream context not initialized");
+    public NatsConnection Connection =>
+        _connection ?? throw new InvalidOperationException("NATS connection not initialized");
+
+    public INatsJSContext JetStreamContext =>
+        _jetStreamContext
+        ?? throw new InvalidOperationException("JetStream context not initialized");
 
     protected override IEnumerable<NatsEndpoint> endpoints() => _endpoints;
 
@@ -50,7 +54,7 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
     public override async ValueTask InitializeAsync(IWolverineRuntime runtime)
     {
         _logger = runtime.LoggerFactory.CreateLogger<NatsTransport>();
-        
+
         // Configure response subject with node identifier
         ResponseSubject = $"wolverine.response.{runtime.Options.Durability.AssignedNodeNumber}";
         var responseEndpoint = _endpoints[ResponseSubject];
@@ -63,7 +67,7 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         await _connection.ConnectAsync();
 
         _logger.LogInformation("Connected to NATS at {Url}", Configuration.ConnectionString);
-        
+
         // Initialize JetStream context if enabled
         if (Configuration.EnableJetStream)
         {
@@ -90,7 +94,10 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         };
 
         // Configure authentication if provided
-        if (!string.IsNullOrEmpty(Configuration.Username) && !string.IsNullOrEmpty(Configuration.Password))
+        if (
+            !string.IsNullOrEmpty(Configuration.Username)
+            && !string.IsNullOrEmpty(Configuration.Password)
+        )
         {
             opts = opts with
             {
@@ -103,23 +110,11 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         }
         else if (!string.IsNullOrEmpty(Configuration.Token))
         {
-            opts = opts with
-            {
-                AuthOpts = new NatsAuthOpts
-                {
-                    Token = Configuration.Token
-                }
-            };
+            opts = opts with { AuthOpts = new NatsAuthOpts { Token = Configuration.Token } };
         }
         else if (!string.IsNullOrEmpty(Configuration.NKeyFile))
         {
-            opts = opts with
-            {
-                AuthOpts = new NatsAuthOpts
-                {
-                    NKey = Configuration.NKeyFile
-                }
-            };
+            opts = opts with { AuthOpts = new NatsAuthOpts { NKey = Configuration.NKeyFile } };
         }
 
         // Configure TLS if enabled
@@ -153,6 +148,12 @@ public class NatsTransport : TransportBase<NatsEndpoint>, IAsyncDisposable
         // Handle both nats://subject and nats://server/subject formats
         var path = uri.LocalPath.Trim('/');
         return string.IsNullOrEmpty(path) ? uri.Host : path;
+    }
+
+    public NatsEndpoint EndpointForSubject(string subject)
+    {
+        var normalized = NormalizeSubject(subject);
+        return _endpoints[normalized];
     }
 
     public async ValueTask DisposeAsync()

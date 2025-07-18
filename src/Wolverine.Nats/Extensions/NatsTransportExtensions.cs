@@ -1,4 +1,7 @@
+using JasperFx.Core.Reflection;
+using Wolverine;
 using Wolverine.Configuration;
+using Wolverine.Nats.Configuration;
 using Wolverine.Nats.Internals;
 
 namespace Wolverine.Nats;
@@ -6,11 +9,81 @@ namespace Wolverine.Nats;
 public static class NatsTransportExtensions
 {
     /// <summary>
+    /// Get access to the NATS transport for advanced configuration
+    /// </summary>
+    internal static NatsTransport NatsTransport(this WolverineOptions options)
+    {
+        return options.Transports.GetOrCreate<NatsTransport>();
+    }
+
+    /// <summary>
     /// Configure Wolverine to use NATS as a message transport
     /// </summary>
-    public static void UseNats(this WolverineOptions options, string connectionString = "nats://localhost:4222")
+    public static void UseNats(
+        this WolverineOptions options,
+        string connectionString = "nats://localhost:4222"
+    )
     {
-        var transport = options.Transports.GetOrCreate<NatsTransport>();
+        var transport = options.NatsTransport();
         transport.Configuration.ConnectionString = connectionString;
+    }
+
+    /// <summary>
+    /// Configure Wolverine to use NATS as a message transport with custom configuration
+    /// </summary>
+    public static void UseNats(this WolverineOptions options, Action<NatsTransport> configure)
+    {
+        var transport = options.NatsTransport();
+        configure(transport);
+    }
+
+    /// <summary>
+    /// Publish messages to a NATS subject
+    /// </summary>
+    public static NatsSubscriberConfiguration ToNatsSubject(
+        this IPublishToExpression publishing,
+        string subject
+    )
+    {
+        var transports = publishing.As<PublishingExpression>().Parent.Transports;
+        var transport = transports.GetOrCreate<NatsTransport>();
+
+        var endpoint = transport.EndpointForSubject(subject);
+
+        // This is necessary to hook up the subscription rules
+        publishing.To(endpoint.Uri);
+
+        return new NatsSubscriberConfiguration(endpoint);
+    }
+
+    /// <summary>
+    /// Publish messages to a NATS subject
+    /// </summary>
+    public static NatsSubscriberConfiguration PublishToNatsSubject<T>(
+        this WolverineOptions options,
+        string subject
+    )
+    {
+        var transport = options.NatsTransport();
+        var endpoint = transport.EndpointForSubject(subject);
+
+        options.PublishMessage<T>().To(endpoint.Uri);
+
+        return new NatsSubscriberConfiguration(endpoint);
+    }
+
+    /// <summary>
+    /// Listen to messages from a NATS subject
+    /// </summary>
+    public static NatsListenerConfiguration ListenToNatsSubject(
+        this WolverineOptions options,
+        string subject
+    )
+    {
+        var transport = options.NatsTransport();
+        var endpoint = transport.EndpointForSubject(subject);
+        endpoint.IsListener = true;
+
+        return new NatsListenerConfiguration(endpoint);
     }
 }

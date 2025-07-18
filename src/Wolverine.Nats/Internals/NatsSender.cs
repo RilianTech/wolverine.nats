@@ -11,13 +11,21 @@ public class NatsSender : ISender
     private readonly NatsEndpoint _endpoint;
     private readonly NatsConnection _connection;
     private readonly ILogger<NatsEndpoint> _logger;
+    private readonly NatsEnvelopeMapper _mapper;
     private readonly CancellationToken _cancellation;
 
-    public NatsSender(NatsEndpoint endpoint, NatsConnection connection, ILogger<NatsEndpoint> logger, CancellationToken cancellation)
+    public NatsSender(
+        NatsEndpoint endpoint,
+        NatsConnection connection,
+        ILogger<NatsEndpoint> logger,
+        NatsEnvelopeMapper mapper,
+        CancellationToken cancellation
+    )
     {
         _endpoint = endpoint;
         _connection = connection;
         _logger = logger;
+        _mapper = mapper;
         _cancellation = cancellation;
         Destination = endpoint.Uri;
     }
@@ -31,7 +39,11 @@ public class NatsSender : ISender
         {
             // Try to publish a ping message and wait for connection confirmation
             var pingSubject = $"_INBOX.wolverine.ping.{Guid.NewGuid():N}";
-            await _connection.PublishAsync(pingSubject, Array.Empty<byte>(), cancellationToken: _cancellation);
+            await _connection.PublishAsync(
+                pingSubject,
+                Array.Empty<byte>(),
+                cancellationToken: _cancellation
+            );
             return _connection.ConnectionState == NatsConnectionState.Open;
         }
         catch (Exception ex)
@@ -45,37 +57,65 @@ public class NatsSender : ISender
     {
         try
         {
-            var headers = _endpoint.BuildHeaders(envelope);
+            var headers = new NatsHeaders();
+            _mapper.MapEnvelopeToOutgoing(envelope, headers);
+
+            // Add custom headers specific to this endpoint
+            foreach (var header in _endpoint.CustomHeaders)
+            {
+                headers[header.Key] = header.Value;
+            }
+
             var data = envelope.Data ?? Array.Empty<byte>();
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Sending message {MessageId} to NATS subject {Subject}", 
-                    envelope.Id, _endpoint.Subject);
+                _logger.LogDebug(
+                    "Sending message {MessageId} to NATS subject {Subject}",
+                    envelope.Id,
+                    _endpoint.Subject
+                );
             }
 
             if (_endpoint.UseJetStream && !string.IsNullOrEmpty(_endpoint.StreamName))
             {
                 // Use JetStream for publishing
                 var js = _connection.CreateJetStreamContext();
-                var ack = await js.PublishAsync(_endpoint.Subject, data, headers: headers, cancellationToken: _cancellation);
-                
+                var ack = await js.PublishAsync(
+                    _endpoint.Subject,
+                    data,
+                    headers: headers,
+                    cancellationToken: _cancellation
+                );
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    _logger.LogDebug("Message {MessageId} published to JetStream with sequence {Sequence}", 
-                        envelope.Id, ack.Seq);
+                    _logger.LogDebug(
+                        "Message {MessageId} published to JetStream with sequence {Sequence}",
+                        envelope.Id,
+                        ack.Seq
+                    );
                 }
             }
             else
             {
                 // Use Core NATS for publishing
-                await _connection.PublishAsync(_endpoint.Subject, data, headers: headers, cancellationToken: _cancellation);
+                await _connection.PublishAsync(
+                    _endpoint.Subject,
+                    data,
+                    headers: headers,
+                    cancellationToken: _cancellation
+                );
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send message {MessageId} to NATS subject {Subject}", 
-                envelope.Id, _endpoint.Subject);
+            _logger.LogError(
+                ex,
+                "Failed to send message {MessageId} to NATS subject {Subject}",
+                envelope.Id,
+                _endpoint.Subject
+            );
             throw;
         }
     }
