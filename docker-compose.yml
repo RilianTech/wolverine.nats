@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   wolverine-nats-test:
     container_name: wolverine-nats-test
