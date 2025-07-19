@@ -91,4 +91,14 @@ public static class NatsTransportExtensions
 
         return new NatsListenerConfiguration(endpoint);
     }
+
+    /// <summary>
+    /// Access the NATS transport configuration for advanced scenarios.
+    /// This is useful for adding policies or modifying configuration after initial setup.
+    /// </summary>
+    public static NatsTransportExpression ConfigureNats(this WolverineOptions options)
+    {
+        var transport = options.NatsTransport();
+        return new NatsTransportExpression(transport, options);
+    }
 }

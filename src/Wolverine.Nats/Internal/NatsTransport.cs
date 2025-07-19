@@ -2,6 +2,7 @@ using JasperFx.Core;
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
+using NATS.Client.JetStream.Models;
 using NATS.Net;
 using Wolverine.Configuration;
 using Wolverine.Nats.Configuration;
@@ -14,7 +15,7 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
 {
     public const string ProtocolName = "nats";
 
-    private readonly LightweightCache<string, NatsEndpoint> _endpoints = new();
+    private readonly JasperFx.Core.LightweightCache<string, NatsEndpoint> _endpoints = new();
     private NatsConnection? _connection;
     private INatsJSContext? _jetStreamContext;
     private ILogger<NatsTransport>? _logger;
@@ -29,7 +30,7 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
         };
     }
 
-    public Uri ResourceUri =>
+    public override Uri ResourceUri =>
         Configuration.ConnectionString != null
             ? new Uri(Configuration.ConnectionString)
             : new Uri("nats://localhost:4222");
@@ -81,6 +82,12 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
         {
             _jetStreamContext = _connection.CreateJetStreamContext();
             _logger.LogInformation("JetStream context initialized");
+            
+            // Provision configured streams
+            if (Configuration.AutoProvision && Configuration.Streams.Any())
+            {
+                await ProvisionStreamsAsync();
+            }
         }
     }
 
@@ -129,4 +136,63 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
             _logger?.LogError(ex, "Error disposing NATS connection");
         }
     }
+
+    private async Task ProvisionStreamsAsync()
+    {
+        _logger?.LogInformation("Provisioning {Count} configured streams", Configuration.Streams.Count);
+
+        foreach (var (name, config) in Configuration.Streams)
+        {
+            try
+            {
+                // Check if stream exists
+                var exists = false;
+                try
+                {
+                    await JetStreamContext.GetStreamAsync(name);
+                    exists = true;
+                    _logger?.LogDebug("Stream {StreamName} already exists", name);
+                }
+                catch (NatsJSException)
+                {
+                    // Stream doesn't exist, we'll create it
+                }
+
+                if (!exists)
+                {
+                    // Create stream configuration
+                    var streamConfig = new StreamConfig(name, config.Subjects)
+                    {
+                        Retention = config.Retention,
+                        Storage = config.Storage,
+                        MaxMsgs = config.MaxMessages ?? -1, // -1 for unlimited
+                        MaxBytes = config.MaxBytes ?? -1, // -1 for unlimited
+                        MaxAge = config.MaxAge ?? TimeSpan.Zero, // 0 for unlimited
+                        MaxMsgsPerSubject = config.MaxMessagesPerSubject ?? 0, // 0 for default
+                        Discard = config.DiscardPolicy,
+                        NumReplicas = config.Replicas,
+                        AllowRollupHdrs = config.AllowRollup,
+                        AllowDirect = config.AllowDirect,
+                        DenyDelete = config.DenyDelete,
+                        DenyPurge = config.DenyPurge
+                    };
+
+                    await JetStreamContext.CreateStreamAsync(streamConfig);
+                    _logger?.LogInformation("Created stream {StreamName} with subjects: {Subjects}", 
+                        name, string.Join(", ", config.Subjects));
+                }
+                else
+                {
+                    // Optionally update stream if configuration has changed
+                    _logger?.LogDebug("Stream {StreamName} already exists, skipping creation", name);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to provision stream {StreamName}", name);
+                throw new InvalidOperationException($"Failed to provision stream '{name}'", ex);
+            }
+        }
+    }
+
 }

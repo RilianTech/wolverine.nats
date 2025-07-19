@@ -1,0 +1,25 @@
+{
+  "customerId": "CUST-123",
+  "items": [
+    {
+      "productId": "LAPTOP-001",
+      "productName": "Gaming Laptop",
+      "quantity": 1,
+      "unitPrice": 1299.99
+    },
+    {
+      "productId": "MOUSE-001",
+      "productName": "Gaming Mouse",
+      "quantity": 2,
+      "unitPrice": 79.99
+    }
+  ],
+  "shippingInfo": {
+    "address": "123 Main St",
+    "city": "Seattle",
+    "state": "WA",
+    "zipCode": "98101",
+    "country": "USA"
+  },
+  "paymentMethod": "CreditCard"
+}

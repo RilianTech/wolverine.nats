@@ -163,6 +163,11 @@ public class NatsTransportConfiguration
     /// Subject prefix template for tenant isolation (e.g., "tenant.{tenantId}")
     /// </summary>
     public string? TenantSubjectPrefix { get; set; }
+    
+    /// <summary>
+    /// Pre-defined streams to create during initialization
+    /// </summary>
+    public Dictionary<string, StreamConfiguration> Streams { get; set; } = new();
 
     /// <summary>
     /// Build NatsOpts from this configuration for creating NATS client

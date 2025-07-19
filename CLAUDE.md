@@ -8,27 +8,28 @@ We are building a NATS transport SDK for the Wolverine messaging framework. This
 - ✅ Core transport classes implemented (NatsTransport, NatsEndpoint, NatsListener, NatsSender)
 - ✅ Configuration classes created
 - ✅ Basic extension methods for UseNats()
-- ❌ Build is failing due to API mismatches
+- ✅ Build is working with Wolverine 4.5.3
+- ✅ Basic serialization and messaging working (PingPong sample works)
+- ✅ JetStream configuration and auto-provisioning implemented
+- ✅ OrderProcessingWithJetStream sample demonstrating real-world usage
 
-## Known Issues to Fix
+## Resolved Issues
 
-### 1. NATS Client API Issues
-- We're using `INatsConnection` but should use `INatsClient` from NATS.Net
-- `CreateJetStreamContext()` is a method on `INatsClient`, not `INatsConnection`
-- The NATS.Net package uses different interfaces than expected
+### 1. Serialization Error - FIXED
+- Changed NatsEnvelope to inherit from Envelope directly
+- Let NatsEnvelopeMapper populate properties instead of copying in constructor
 
-### 2. Wolverine Envelope Issues
-- Properties like `ReplyUri`, `ConversationId`, `Source`, and `SentAt` have internal setters
-- We cannot directly set these properties when creating envelopes
-- Need to find alternative approaches or use reflection
+### 2. URI Format - FIXED
+- Changed from `nats://{subject}` to `nats://subject/{subject}` to match Wolverine patterns
 
-### 3. JetStream API Issues
-- `AckAsync()` and `NakAsync()` methods don't exist directly on `NatsJSMsg<T>`
-- Need to check the correct API for acknowledging JetStream messages
+### 3. Wolverine 4.5.3 API Changes - FIXED
+- Added `Pipeline` property to NatsListener: `public IHandlerPipeline? Pipeline { get; private set; }`
+- Made `ResourceUri` override in NatsTransport
+- Switched from JasperFx.Core to JasperFx 1.2.2 to resolve LightweightCache conflicts
 
-### 4. Method Signatures
-- `DateTimeOffset` is not nullable in Envelope, but we're treating it as nullable
-- Some type conversions need explicit casts (e.g., ulong to int)
+### 4. Package Versions - FIXED
+- Using centralized package management with Directory.Packages.props
+- Multi-targeting for .NET 8 and .NET 9
 
 ## Reference Code Locations
 - Wolverine source: `../wolverine`
@@ -42,13 +43,13 @@ dotnet test
 ```
 
 ## Next Steps
-1. Fix the NATS client API usage (switch from INatsConnection to INatsClient)
-2. Handle Wolverine Envelope read-only properties
-3. Fix JetStream message acknowledgment
-4. Add proper error handling
-5. Implement missing transport features
-6. Add unit tests
-7. Add integration tests
+1. Add comprehensive unit tests
+2. Add integration tests with real NATS server
+3. Implement advanced JetStream features (pull consumers, work queues)
+4. Add support for NATS KV and Object Store
+5. Performance optimization and benchmarking
+6. Documentation and examples
+7. Compliance tests using Wolverine's transport test suite
 
 ## Architecture Notes
 - Following Wolverine's transport pattern (ITransport, Endpoint, IListener, ISender)
@@ -64,10 +65,11 @@ dotnet test
 - Performance benchmarks
 
 ## Dependencies
-- WolverineFx 3.4.0
+- WolverineFx 4.5.3
 - NATS.Net 2.5.7
-- JasperFx.Core 2.0.0
-- Microsoft.Extensions.* 8.0.2
+- JasperFx 1.2.2 (not JasperFx.Core - causes conflicts with Wolverine)
+- Microsoft.Extensions.* 9.0.0 (for .NET 9 target)
+- Microsoft.Extensions.* 8.0.x (for .NET 8 target)
 
 ## Important Patterns
 1. Envelope mapping between Wolverine and NATS headers
@@ -75,3 +77,13 @@ dotnet test
 3. JetStream consumer management (durable vs ephemeral)
 4. Error handling and retry logic with RetryBlock
 5. Cancellation token propagation
+
+## Sample Projects
+1. **PingPong** - Basic Core NATS messaging example
+2. **StandardsAlignedExample** - Shows request/reply patterns
+3. **OrderProcessingWithJetStream** - Comprehensive JetStream example with:
+   - Event-driven architecture
+   - Saga pattern implementation
+   - Consumer groups for horizontal scaling
+   - Stream auto-provisioning
+   - Dead letter queue configuration

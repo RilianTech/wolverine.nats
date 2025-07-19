@@ -277,6 +277,7 @@ docker compose logs wolverine-nats-test
 
 ### Testing with Sample Applications
 
+#### Basic Ping/Pong Sample
 ```bash
 # Terminal 1 - Start the Ponger (receives messages)
 cd samples/PingPongWithNats/Ponger
@@ -286,6 +287,21 @@ dotnet run
 cd samples/PingPongWithNats/Pinger
 dotnet run
 ```
+
+#### Real-World Order Processing Sample
+Demonstrates JetStream, consumer groups, and saga pattern:
+```bash
+# Start all services (each in separate terminal)
+cd samples/OrderProcessingWithJetStream
+dotnet run --project OrderService      # API on port 5000
+dotnet run --project InventoryService   # Can run multiple instances
+dotnet run --project PaymentService     # Simulates payment processing
+
+# Create an order via API
+curl -X POST http://localhost:5000/api/orders -H "Content-Type: application/json" -d @order.json
+```
+
+See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture and usage.
 
 ## Current Implementation Status
 

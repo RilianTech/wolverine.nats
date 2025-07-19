@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Disable treating warnings as errors for samples -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1603;NU1608</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>

@@ -4,6 +4,7 @@ using NATS.Client.JetStream;
 using NATS.Client.JetStream.Models;
 using NATS.Net;
 using Wolverine.Runtime;
+using Wolverine.Runtime.Handlers;
 using Wolverine.Transports;
 using Wolverine.Transports.Sending;
 using Wolverine.Util.Dataflow;
@@ -22,6 +23,8 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
     private readonly RetryBlock<NatsEnvelope> _defer;
     private readonly NatsEnvelopeMapper _mapper;
     private readonly JetStreamEnvelopeMapper _jsMapper;
+    
+    public IHandlerPipeline? Pipeline { get; private set; }
 
     private IAsyncDisposable? _subscription;
     private Task? _consumerTask;
@@ -206,27 +209,35 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         _consumerTask = Task.Run(
             async () =>
             {
-                await foreach (
-                    var msg in ((INatsSub<byte[]>)_subscription).Msgs.ReadAllAsync(
-                        _cancellation.Token
-                    )
-                )
+                try
                 {
-                    try
+                    await foreach (
+                        var msg in ((INatsSub<byte[]>)_subscription).Msgs.ReadAllAsync(
+                            _cancellation.Token
+                        )
+                    )
                     {
-                        var envelope = new NatsEnvelope(msg, null);
-                        _mapper.MapIncomingToEnvelope(envelope, msg);
+                        try
+                        {
+                            var envelope = new NatsEnvelope(msg, null);
+                            _mapper.MapIncomingToEnvelope(envelope, msg);
 
-                        await _receiver.ReceivedAsync(this, envelope);
+                            await _receiver.ReceivedAsync(this, envelope);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(
+                                ex,
+                                "Error processing NATS message from subject {Subject}",
+                                msg.Subject
+                            );
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Error processing NATS message from subject {Subject}",
-                            msg.Subject
-                        );
-                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected during shutdown
+                    _logger.LogDebug("NATS listener for {Subject} was cancelled", _endpoint.Subject);
                 }
             },
             _cancellation.Token
@@ -246,26 +257,56 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
 
         // Create or get consumer
         INatsJSConsumer consumer;
+        var config = new ConsumerConfig
+        {
+            AckPolicy = ConsumerConfigAckPolicy.Explicit,
+            MaxDeliver = _endpoint.MaxDeliveryAttempts,
+            AckWait = TimeSpan.FromSeconds(30)
+        };
+        
+        // Only set filter subject if not using a durable consumer
+        // Durable consumers typically listen to multiple subjects
+        if (string.IsNullOrEmpty(_endpoint.ConsumerName))
+        {
+            config.FilterSubject = _endpoint.Subject;
+        }
+        
         if (!string.IsNullOrEmpty(_endpoint.ConsumerName))
         {
-            // Use existing durable consumer
-            consumer = await js.GetConsumerAsync(
-                _endpoint.StreamName!,
-                _endpoint.ConsumerName,
-                _cancellation.Token
-            );
+            // Create or update durable consumer
+            config.Name = _endpoint.ConsumerName;
+            config.DurableName = _endpoint.ConsumerName;
+            
+            // Add queue group if specified
+            if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
+            {
+                config.DeliverGroup = _endpoint.QueueGroup;
+            }
+            
+            // Try to get existing consumer first
+            try
+            {
+                consumer = await js.GetConsumerAsync(
+                    _endpoint.StreamName!,
+                    _endpoint.ConsumerName,
+                    _cancellation.Token
+                );
+                _logger.LogInformation("Using existing consumer {Consumer}", _endpoint.ConsumerName);
+            }
+            catch (NatsJSException)
+            {
+                // Consumer doesn't exist, create it
+                consumer = await js.CreateOrUpdateConsumerAsync(
+                    _endpoint.StreamName!,
+                    config,
+                    _cancellation.Token
+                );
+                _logger.LogInformation("Created new consumer {Consumer}", _endpoint.ConsumerName);
+            }
         }
         else
         {
             // Create ephemeral consumer
-            var config = new ConsumerConfig
-            {
-                FilterSubject = _endpoint.Subject,
-                AckPolicy = ConsumerConfigAckPolicy.Explicit,
-                MaxDeliver = 3,
-                AckWait = TimeSpan.FromSeconds(30)
-            };
-
             consumer = await js.CreateOrUpdateConsumerAsync(
                 _endpoint.StreamName!,
                 config,
@@ -276,29 +317,38 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         _consumerTask = Task.Run(
             async () =>
             {
-                await foreach (
-                    var msg in consumer.ConsumeAsync<byte[]>(cancellationToken: _cancellation.Token)
-                )
+                try
                 {
-                    try
+                    await foreach (
+                        var msg in consumer.ConsumeAsync<byte[]>(cancellationToken: _cancellation.Token)
+                    )
                     {
-                        var envelope = new NatsEnvelope(null, msg);
-                        _jsMapper.MapIncomingToEnvelope(envelope, msg);
-                        envelope.Attempts = (int)(msg.Metadata?.NumDelivered ?? 0);
+                        try
+                        {
+                            var envelope = new NatsEnvelope(null, msg);
+                            _jsMapper.MapIncomingToEnvelope(envelope, msg);
+                            envelope.Attempts = (int)(msg.Metadata?.NumDelivered ?? 0);
 
-                        await _receiver.ReceivedAsync(this, envelope);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Error processing JetStream message from subject {Subject}",
-                            msg.Subject
-                        );
+                            await _receiver.ReceivedAsync(this, envelope);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(
+                                ex,
+                                "Error processing JetStream message from subject {Subject}",
+                                msg.Subject
+                            );
 
-                        // NAck the message to trigger redelivery
-                        await msg.NakAsync(cancellationToken: _cancellation.Token);
+                            // NAck the message to trigger redelivery
+                            await msg.NakAsync(cancellationToken: _cancellation.Token);
+                        }
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected during shutdown
+                    _logger.LogDebug("JetStream consumer for {Stream}/{Consumer} was cancelled", 
+                        _endpoint.StreamName, _endpoint.ConsumerName ?? "ephemeral");
                 }
             },
             _cancellation.Token

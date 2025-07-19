@@ -96,6 +96,54 @@ public class NatsTransportExpression
         return this;
     }
 
+    /// <summary>
+    ///     Define a JetStream stream configuration
+    /// </summary>
+    public NatsTransportExpression DefineStream(string streamName, Action<StreamConfiguration> configure)
+    {
+        var streamConfig = new StreamConfiguration { Name = streamName };
+        configure(streamConfig);
+        Transport.Configuration.Streams[streamName] = streamConfig;
+        Transport.Configuration.EnableJetStream = true;
+        return this;
+    }
+
+    /// <summary>
+    ///     Define a work queue stream (retention by interest)
+    /// </summary>
+    public NatsTransportExpression DefineWorkQueueStream(string streamName, params string[] subjects)
+    {
+        return DefineStream(streamName, stream =>
+        {
+            stream.AsWorkQueue()
+                  .WithSubjects(subjects);
+        });
+    }
+
+    /// <summary>
+    ///     Define a log stream with time-based retention
+    /// </summary>
+    public NatsTransportExpression DefineLogStream(string streamName, TimeSpan retention, params string[] subjects)
+    {
+        return DefineStream(streamName, stream =>
+        {
+            stream.WithSubjects(subjects)
+                  .WithLimits(maxAge: retention);
+        });
+    }
+
+    /// <summary>
+    ///     Define a high-availability stream with replication
+    /// </summary>
+    public NatsTransportExpression DefineReplicatedStream(string streamName, int replicas, params string[] subjects)
+    {
+        return DefineStream(streamName, stream =>
+        {
+            stream.WithSubjects(subjects)
+                  .WithReplicas(replicas);
+        });
+    }
+
     protected override NatsListenerConfiguration createListenerExpression(
         NatsEndpoint listenerEndpoint
     )

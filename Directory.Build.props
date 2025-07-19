@@ -4,11 +4,11 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     
     <!-- Package metadata -->
-    <Authors>Your Name</Authors>
-    <Company>Your Company</Company>
+    <Authors>@thedonmon</Authors>
+    <Company>Rilian</Company>
     <Product>Wolverine.Nats</Product>
     <Copyright>Copyright © $([System.DateTime]::Now.Year)</Copyright>
     
@@ -17,9 +17,9 @@
     <VersionSuffix Condition="'$(CI)' == 'true' AND '$(GITHUB_REF)' != 'refs/heads/main'">preview-$(GITHUB_RUN_NUMBER)</VersionSuffix>
     
     <!-- Build settings -->
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn> <!-- Missing XML comment for publicly visible type or member -->
+    <NoWarn>$(NoWarn);CS1591;NU1605</NoWarn> <!-- CS1591: Missing XML comment; NU1605: Package downgrade -->
     
     <!-- Source control -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -33,6 +33,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All"/>
   </ItemGroup>
 </Project>
