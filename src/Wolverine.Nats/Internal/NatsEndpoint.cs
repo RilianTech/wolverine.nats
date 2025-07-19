@@ -18,7 +18,7 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
     private NatsEnvelopeMapper? _mapper;
 
     public NatsEndpoint(string subject, NatsTransport transport, EndpointRole role)
-        : base(new Uri($"nats://{subject}"), role)
+        : base(new Uri($"nats://subject/{subject}"), role)
     {
         Subject = subject;
         _transport = transport;
@@ -90,6 +90,12 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         _connection = _transport.Connection;
         _logger = runtime.LoggerFactory.CreateLogger<NatsEndpoint>();
         _mapper = new NatsEnvelopeMapper(this);
+        
+        // Configure the mapper with MessageType if set
+        if (MessageType != null)
+        {
+            _mapper.ReceivesMessage(MessageType);
+        }
 
         return new NatsSender(this, _connection, _logger, _mapper, runtime.Cancellation);
     }

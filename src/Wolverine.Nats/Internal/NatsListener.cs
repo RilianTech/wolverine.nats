@@ -43,6 +43,13 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         _cancellation = CancellationTokenSource.CreateLinkedTokenSource(parentCancellation);
         _mapper = new NatsEnvelopeMapper(endpoint);
         _jsMapper = new JetStreamEnvelopeMapper(endpoint);
+        
+        // Configure mappers with MessageType if set
+        if (endpoint.MessageType != null)
+        {
+            _mapper.ReceivesMessage(endpoint.MessageType);
+            _jsMapper.ReceivesMessage(endpoint.MessageType);
+        }
 
         Address = endpoint.Uri;
 
@@ -207,11 +214,10 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
                 {
                     try
                     {
-                        var envelope = new Envelope();
+                        var envelope = new NatsEnvelope(msg, null);
                         _mapper.MapIncomingToEnvelope(envelope, msg);
-                        var natsEnvelope = new NatsEnvelope(envelope, msg, null);
 
-                        await _receiver.ReceivedAsync(this, natsEnvelope);
+                        await _receiver.ReceivedAsync(this, envelope);
                     }
                     catch (Exception ex)
                     {
@@ -276,13 +282,11 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
                 {
                     try
                     {
-                        var envelope = new Envelope();
+                        var envelope = new NatsEnvelope(null, msg);
                         _jsMapper.MapIncomingToEnvelope(envelope, msg);
                         envelope.Attempts = (int)(msg.Metadata?.NumDelivered ?? 0);
 
-                        var natsEnvelope = new NatsEnvelope(envelope, null, msg);
-
-                        await _receiver.ReceivedAsync(this, natsEnvelope);
+                        await _receiver.ReceivedAsync(this, envelope);
                     }
                     catch (Exception ex)
                     {

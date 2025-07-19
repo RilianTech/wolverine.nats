@@ -46,7 +46,7 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
         envelope.Data = incoming.Data;
 
         // Set the destination based on the NATS subject
-        envelope.Destination = new Uri($"nats://{incoming.Subject}");
+        envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
 
         // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))
@@ -54,7 +54,7 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
             EnvelopeSerializer.ReadDataElement(
                 envelope,
                 EnvelopeConstants.ReplyUriKey,
-                $"nats://{incoming.ReplyTo}"
+                $"nats://subject/{incoming.ReplyTo}"
             );
         }
 
@@ -113,7 +113,7 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
         envelope.Data = incoming.Data;
 
         // Set the destination based on the NATS subject
-        envelope.Destination = new Uri($"nats://{incoming.Subject}");
+        envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
 
         // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))
@@ -121,7 +121,7 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
             EnvelopeSerializer.ReadDataElement(
                 envelope,
                 EnvelopeConstants.ReplyUriKey,
-                $"nats://{incoming.ReplyTo}"
+                $"nats://subject/{incoming.ReplyTo}"
             );
         }
 

@@ -6,26 +6,8 @@ namespace Wolverine.Nats.Internal;
 
 public class NatsEnvelope : Envelope
 {
-    public NatsEnvelope(Envelope inner, NatsMsg<byte[]>? coreMsg, NatsJSMsg<byte[]>? jetStreamMsg)
-        : base(inner.Data ?? Array.Empty<byte>())
+    public NatsEnvelope(NatsMsg<byte[]>? coreMsg, NatsJSMsg<byte[]>? jetStreamMsg)
     {
-        // Copy properties that are settable
-        Id = inner.Id;
-        CorrelationId = inner.CorrelationId;
-        MessageType = inner.MessageType;
-        ContentType = inner.ContentType;
-        Destination = inner.Destination;
-        DeliverBy = inner.DeliverBy;
-        Message = inner.Message;
-        TenantId = inner.TenantId;
-        Attempts = inner.Attempts;
-
-        // Copy headers
-        foreach (var header in inner.Headers)
-        {
-            Headers[header.Key] = header.Value;
-        }
-
         CoreMsg = coreMsg;
         JetStreamMsg = jetStreamMsg;
     }
