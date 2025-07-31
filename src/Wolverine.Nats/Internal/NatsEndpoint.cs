@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
-using NATS.Client.JetStream;
 using NATS.Client.JetStream.Models;
 using NATS.Net;
 using Wolverine.Configuration;
@@ -90,14 +89,22 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         _connection = _transport.Connection;
         _logger = runtime.LoggerFactory.CreateLogger<NatsEndpoint>();
         _mapper = new NatsEnvelopeMapper(this);
-        
+
         // Configure the mapper with MessageType if set
         if (MessageType != null)
         {
             _mapper.ReceivesMessage(MessageType);
         }
 
-        return new NatsSender(this, _connection, _logger, _mapper, runtime.Cancellation);
+        // Create the appropriate sender based on configuration
+        return NatsSender.Create(
+            this,
+            _connection,
+            _logger,
+            _mapper,
+            runtime.Cancellation,
+            UseJetStream && _transport.Configuration.EnableJetStream
+        );
     }
 
     public override async ValueTask<IListener> BuildListenerAsync(
@@ -108,13 +115,23 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         _connection = _transport.Connection;
         _logger = runtime.LoggerFactory.CreateLogger<NatsEndpoint>();
 
-        var listener = new NatsListener(
+        // Create dead letter sender if needed
+        ISender? deadLetterSender = null;
+        if (!string.IsNullOrEmpty(DeadLetterSubject))
+        {
+            var dlqEndpoint = _transport.EndpointForSubject(DeadLetterSubject);
+            deadLetterSender = (ISender)runtime.Endpoints.GetOrBuildSendingAgent(dlqEndpoint.Uri);
+        }
+
+        var listener = NatsListener.Create(
             this,
             _connection,
             runtime,
             receiver,
             _logger,
-            runtime.Cancellation
+            deadLetterSender,
+            runtime.Cancellation,
+            UseJetStream && _transport.Configuration.EnableJetStream
         );
 
         await listener.StartAsync();

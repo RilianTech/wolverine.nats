@@ -1,5 +1,4 @@
 using JasperFx.Core.Reflection;
-using Wolverine;
 using Wolverine.Configuration;
 using Wolverine.Nats.Configuration;
 using Wolverine.Nats.Internal;

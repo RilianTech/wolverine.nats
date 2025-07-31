@@ -1,10 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
-using NATS.Client.JetStream;
-using NATS.Client.JetStream.Models;
-using NATS.Net;
 using Wolverine.Runtime;
-using Wolverine.Runtime.Handlers;
 using Wolverine.Transports;
 using Wolverine.Transports.Sending;
 using Wolverine.Util.Dataflow;
@@ -14,46 +10,34 @@ namespace Wolverine.Nats.Internal;
 public class NatsListener : IListener, ISupportDeadLetterQueue
 {
     private readonly NatsEndpoint _endpoint;
-    private readonly NatsConnection _connection;
     private readonly IWolverineRuntime _runtime;
     private readonly IReceiver _receiver;
     private readonly ILogger<NatsEndpoint> _logger;
     private readonly CancellationTokenSource _cancellation;
     private readonly RetryBlock<NatsEnvelope> _complete;
     private readonly RetryBlock<NatsEnvelope> _defer;
-    private readonly NatsEnvelopeMapper _mapper;
-    private readonly JetStreamEnvelopeMapper _jsMapper;
-    
+    private readonly INatsSubscriber _subscriber;
+    private readonly ISender _deadLetterSender;
+
     public IHandlerPipeline? Pipeline { get; private set; }
 
-    private IAsyncDisposable? _subscription;
-    private Task? _consumerTask;
-
-    public NatsListener(
+    internal NatsListener(
         NatsEndpoint endpoint,
-        NatsConnection connection,
+        INatsSubscriber subscriber,
         IWolverineRuntime runtime,
         IReceiver receiver,
         ILogger<NatsEndpoint> logger,
+        ISender deadLetterSender,
         CancellationToken parentCancellation
     )
     {
         _endpoint = endpoint;
-        _connection = connection;
+        _subscriber = subscriber;
         _runtime = runtime;
         _receiver = receiver;
         _logger = logger;
+        _deadLetterSender = deadLetterSender;
         _cancellation = CancellationTokenSource.CreateLinkedTokenSource(parentCancellation);
-        _mapper = new NatsEnvelopeMapper(endpoint);
-        _jsMapper = new JetStreamEnvelopeMapper(endpoint);
-        
-        // Configure mappers with MessageType if set
-        if (endpoint.MessageType != null)
-        {
-            _mapper.ReceivesMessage(endpoint.MessageType);
-            _jsMapper.ReceivesMessage(endpoint.MessageType);
-        }
-
         Address = endpoint.Uri;
 
         _complete = new RetryBlock<NatsEnvelope>(
@@ -94,59 +78,46 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
     public Uri Address { get; }
 
     // ISupportDeadLetterQueue implementation
-    public bool NativeDeadLetterQueueEnabled =>
-        _endpoint.UseJetStream && _endpoint.DeadLetterQueueEnabled;
+    public bool NativeDeadLetterQueueEnabled => _subscriber.SupportsNativeDeadLetterQueue;
 
     public async Task MoveToErrorsAsync(Envelope envelope, Exception exception)
     {
         if (envelope is NatsEnvelope natsEnvelope)
         {
-            // For JetStream messages, use AckTerm to terminate delivery
-            // This will trigger the advisory message and prevent further redeliveries
-            if (natsEnvelope.JetStreamMsg != null)
+            // Handle dead letter queue
+            if (NativeDeadLetterQueueEnabled && natsEnvelope.JetStreamMsg != null)
             {
-                await natsEnvelope.JetStreamMsg.Value.AckTerminateAsync(
-                    cancellationToken: _cancellation.Token
-                );
-                _logger.LogInformation(
-                    "Terminated message delivery for {MessageId} after {Attempts} attempts",
-                    envelope.Id,
-                    envelope.Attempts
-                );
-            }
+                var metadata = natsEnvelope.JetStreamMsg.Value.Metadata;
 
-            // If configured, also publish the message to a separate dead letter subject
-            if (!string.IsNullOrEmpty(_endpoint.DeadLetterSubject))
-            {
-                try
+                // Check if we've exceeded delivery attempts
+                if (metadata?.NumDelivered >= (ulong)_endpoint.MaxDeliveryAttempts)
                 {
-                    // Add DLQ metadata to headers
-                    var headers = _endpoint.BuildHeaders(envelope);
-                    headers["x-dlq-reason"] = exception.Message;
-                    headers["x-dlq-timestamp"] = DateTimeOffset.UtcNow.ToString("O");
-                    headers["x-dlq-original-subject"] = _endpoint.Subject;
-                    headers["x-dlq-attempts"] = envelope.Attempts.ToString();
-                    headers["x-dlq-exception-type"] = exception.GetType().FullName ?? "Unknown";
-
-                    await _connection.PublishAsync(
-                        _endpoint.DeadLetterSubject,
-                        envelope.Data,
-                        headers,
+                    // Acknowledge the message to prevent further redelivery
+                    await natsEnvelope.JetStreamMsg.Value.AckAsync(
                         cancellationToken: _cancellation.Token
                     );
 
-                    _logger.LogInformation(
-                        "Published dead letter message {MessageId} to {Subject}",
-                        envelope.Id,
-                        _endpoint.DeadLetterSubject
-                    );
-                }
-                catch (Exception ex)
-                {
+                    // Send to dead letter queue if configured
+                    if (!string.IsNullOrEmpty(_endpoint.DeadLetterSubject))
+                    {
+                        envelope.Attempts = (int)(metadata?.NumDelivered ?? 1);
+
+                        // Add DLQ metadata to the envelope
+                        envelope.Headers["x-dlq-reason"] = exception.Message;
+                        envelope.Headers["x-dlq-timestamp"] = DateTimeOffset.UtcNow.ToString("O");
+                        envelope.Headers["x-dlq-original-subject"] = _endpoint.Subject;
+                        envelope.Headers["x-dlq-attempts"] = envelope.Attempts.ToString();
+                        envelope.Headers["x-dlq-exception-type"] =
+                            exception.GetType().FullName ?? "Unknown";
+
+                        await _deadLetterSender.SendAsync(envelope);
+                    }
+
                     _logger.LogError(
-                        ex,
-                        "Failed to publish dead letter message {MessageId} to {Subject}",
+                        exception,
+                        "Message {MessageId} moved to dead letter queue after {Attempts} attempts. Subject: {Subject}",
                         envelope.Id,
+                        metadata?.NumDelivered ?? 1,
                         _endpoint.DeadLetterSubject
                     );
                 }
@@ -172,222 +143,71 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
 
     public async Task StartAsync()
     {
-        if (_endpoint.UseJetStream && !string.IsNullOrEmpty(_endpoint.StreamName))
-        {
-            await StartJetStreamConsumerAsync();
-        }
-        else
-        {
-            await StartCoreNatsSubscriptionAsync();
-        }
-    }
-
-    private async Task StartCoreNatsSubscriptionAsync()
-    {
-        _logger.LogInformation(
-            "Starting Core NATS listener for subject {Subject} with queue group {QueueGroup}",
-            _endpoint.Subject,
-            _endpoint.QueueGroup ?? "(none)"
-        );
-
-        if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
-        {
-            _subscription = await _connection.SubscribeCoreAsync<byte[]>(
-                _endpoint.Subject,
-                _endpoint.QueueGroup,
-                cancellationToken: _cancellation.Token
-            );
-        }
-        else
-        {
-            _subscription = await _connection.SubscribeCoreAsync<byte[]>(
-                _endpoint.Subject,
-                cancellationToken: _cancellation.Token
-            );
-        }
-
-        _consumerTask = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    await foreach (
-                        var msg in ((INatsSub<byte[]>)_subscription).Msgs.ReadAllAsync(
-                            _cancellation.Token
-                        )
-                    )
-                    {
-                        try
-                        {
-                            var envelope = new NatsEnvelope(msg, null);
-                            _mapper.MapIncomingToEnvelope(envelope, msg);
-
-                            await _receiver.ReceivedAsync(this, envelope);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(
-                                ex,
-                                "Error processing NATS message from subject {Subject}",
-                                msg.Subject
-                            );
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected during shutdown
-                    _logger.LogDebug("NATS listener for {Subject} was cancelled", _endpoint.Subject);
-                }
-            },
-            _cancellation.Token
-        );
-    }
-
-    private async Task StartJetStreamConsumerAsync()
-    {
-        _logger.LogInformation(
-            "Starting JetStream listener for stream {Stream}, consumer {Consumer}, subject {Subject}",
-            _endpoint.StreamName,
-            _endpoint.ConsumerName ?? "(ephemeral)",
-            _endpoint.Subject
-        );
-
-        var js = _connection.CreateJetStreamContext();
-
-        // Create or get consumer
-        INatsJSConsumer consumer;
-        var config = new ConsumerConfig
-        {
-            AckPolicy = ConsumerConfigAckPolicy.Explicit,
-            MaxDeliver = _endpoint.MaxDeliveryAttempts,
-            AckWait = TimeSpan.FromSeconds(30)
-        };
-        
-        // Only set filter subject if not using a durable consumer
-        // Durable consumers typically listen to multiple subjects
-        if (string.IsNullOrEmpty(_endpoint.ConsumerName))
-        {
-            config.FilterSubject = _endpoint.Subject;
-        }
-        
-        if (!string.IsNullOrEmpty(_endpoint.ConsumerName))
-        {
-            // Create or update durable consumer
-            config.Name = _endpoint.ConsumerName;
-            config.DurableName = _endpoint.ConsumerName;
-            
-            // Add queue group if specified
-            if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
-            {
-                config.DeliverGroup = _endpoint.QueueGroup;
-            }
-            
-            // Try to get existing consumer first
-            try
-            {
-                consumer = await js.GetConsumerAsync(
-                    _endpoint.StreamName!,
-                    _endpoint.ConsumerName,
-                    _cancellation.Token
-                );
-                _logger.LogInformation("Using existing consumer {Consumer}", _endpoint.ConsumerName);
-            }
-            catch (NatsJSException)
-            {
-                // Consumer doesn't exist, create it
-                consumer = await js.CreateOrUpdateConsumerAsync(
-                    _endpoint.StreamName!,
-                    config,
-                    _cancellation.Token
-                );
-                _logger.LogInformation("Created new consumer {Consumer}", _endpoint.ConsumerName);
-            }
-        }
-        else
-        {
-            // Create ephemeral consumer
-            consumer = await js.CreateOrUpdateConsumerAsync(
-                _endpoint.StreamName!,
-                config,
-                _cancellation.Token
-            );
-        }
-
-        _consumerTask = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    await foreach (
-                        var msg in consumer.ConsumeAsync<byte[]>(cancellationToken: _cancellation.Token)
-                    )
-                    {
-                        try
-                        {
-                            var envelope = new NatsEnvelope(null, msg);
-                            _jsMapper.MapIncomingToEnvelope(envelope, msg);
-                            envelope.Attempts = (int)(msg.Metadata?.NumDelivered ?? 0);
-
-                            await _receiver.ReceivedAsync(this, envelope);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(
-                                ex,
-                                "Error processing JetStream message from subject {Subject}",
-                                msg.Subject
-                            );
-
-                            // NAck the message to trigger redelivery
-                            await msg.NakAsync(cancellationToken: _cancellation.Token);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected during shutdown
-                    _logger.LogDebug("JetStream consumer for {Stream}/{Consumer} was cancelled", 
-                        _endpoint.StreamName, _endpoint.ConsumerName ?? "ephemeral");
-                }
-            },
-            _cancellation.Token
-        );
+        await _subscriber.StartAsync(this, _receiver, _cancellation.Token);
     }
 
     public ValueTask StopAsync()
     {
         _cancellation.Cancel();
-        return new ValueTask();
+        return ValueTask.CompletedTask;
     }
 
     public void Dispose()
     {
         _cancellation.Cancel();
+        _cancellation.Dispose();
+    }
 
-        _subscription?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        _consumerTask?.GetAwaiter().GetResult();
+    public async ValueTask DisposeAsync()
+    {
+        _cancellation.Cancel();
+
+        await _subscriber.DisposeAsync();
 
         _complete.Dispose();
         _defer.Dispose();
         _cancellation.Dispose();
     }
 
-    public ValueTask DisposeAsync()
+    internal static NatsListener Create(
+        NatsEndpoint endpoint,
+        NatsConnection connection,
+        IWolverineRuntime runtime,
+        IReceiver receiver,
+        ILogger<NatsEndpoint> logger,
+        ISender? deadLetterSender,
+        CancellationToken cancellation,
+        bool useJetStream
+    )
     {
-        _cancellation.Cancel();
+        INatsSubscriber subscriber;
+        if (useJetStream)
+        {
+            var jsMapper = new JetStreamEnvelopeMapper(endpoint);
+            if (endpoint.MessageType != null)
+            {
+                jsMapper.ReceivesMessage(endpoint.MessageType);
+            }
+            subscriber = new JetStreamSubscriber(endpoint, connection, logger, jsMapper);
+        }
+        else
+        {
+            var mapper = new NatsEnvelopeMapper(endpoint);
+            if (endpoint.MessageType != null)
+            {
+                mapper.ReceivesMessage(endpoint.MessageType);
+            }
+            subscriber = new CoreNatsSubscriber(endpoint, connection, logger, mapper);
+        }
 
-        return new ValueTask(
-            Task.WhenAll(
-                _subscription?.DisposeAsync().AsTask() ?? Task.CompletedTask,
-                _consumerTask ?? Task.CompletedTask,
-                Task.Run(() =>
-                {
-                    _complete.Dispose();
-                    _defer.Dispose();
-                    _cancellation.Dispose();
-                })
-            )
+        return new NatsListener(
+            endpoint,
+            subscriber,
+            runtime,
+            receiver,
+            logger,
+            deadLetterSender ?? new NullSender(),
+            cancellation
         );
     }
 }

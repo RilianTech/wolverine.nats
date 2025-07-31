@@ -15,7 +15,6 @@ builder.Host.UseWolverine(opts =>
         })
         .UseTls(insecureSkipVerify: true)
         .WithSubjectPrefix("app")
-        
         // Configure ALL listening endpoints
         .ConfigureListeners(listener =>
         {
@@ -23,12 +22,8 @@ builder.Host.UseWolverine(opts =>
             listener
                 .UseJetStream()
                 .UseQueueGroup("my-service")
-                .ConfigureDeadLetterQueue(
-                    maxDeliveryAttempts: 3,
-                    deadLetterSubject: "dead-letter"
-                );
+                .ConfigureDeadLetterQueue(maxDeliveryAttempts: 3, deadLetterSubject: "dead-letter");
         })
-        
         // Configure ALL sending endpoints
         .ConfigureSenders(sender =>
         {
@@ -41,16 +36,12 @@ builder.Host.UseWolverine(opts =>
         .UseQueueGroup("order-processors") // Overrides the default "my-service"
         .ConfigureDeadLetterQueue(5); // Overrides the default 3 attempts
 
-    opts.ListenToNatsSubject("orders.shipped")
-        .DisableDeadLetterQueueing(); // Disables DLQ for this specific endpoint
+    opts.ListenToNatsSubject("orders.shipped").DisableDeadLetterQueueing(); // Disables DLQ for this specific endpoint
 
     // Publishing configuration
-    opts.PublishMessage<OrderCreated>()
-        .ToNatsSubject("orders.created");
-        
-    opts.PublishMessage<OrderShipped>()
-        .ToNatsSubject("orders.shipped")
-        .UseJetStream("ORDERS"); // Override stream name for this endpoint
+    opts.PublishMessage<OrderCreated>().ToNatsSubject("orders.created");
+
+    opts.PublishMessage<OrderShipped>().ToNatsSubject("orders.shipped").UseJetStream("ORDERS"); // Override stream name for this endpoint
 });
 
 var app = builder.Build();
@@ -60,6 +51,7 @@ app.MapGet("/", () => "NATS Endpoint Configuration Example");
 app.Run();
 
 public record OrderCreated(Guid OrderId, string CustomerId, decimal Total);
+
 public record OrderShipped(Guid OrderId, DateTime ShippedAt);
 
 // Example handlers
@@ -69,7 +61,7 @@ public class OrderHandlers
     {
         Console.WriteLine($"Processing order {order.OrderId} for {order.CustomerId}");
     }
-    
+
     public void Handle(OrderShipped shipment)
     {
         Console.WriteLine($"Order {shipment.OrderId} shipped at {shipment.ShippedAt}");

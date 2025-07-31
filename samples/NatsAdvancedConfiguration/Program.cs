@@ -14,9 +14,7 @@ builder.Host.UseWolverine(opts =>
     opts.UseNats()
         .ConfigureListeners(listener =>
         {
-            listener
-                .UseJetStream()
-                .UseQueueGroup($"{Environment.MachineName}-workers");
+            listener.UseJetStream().UseQueueGroup($"{Environment.MachineName}-workers");
         })
         .ConfigureSenders(sender =>
         {
@@ -25,35 +23,40 @@ builder.Host.UseWolverine(opts =>
 
     // Example 2: Adding a custom endpoint policy for more control
     opts.Policies.Add(new NatsJetStreamPolicy());
-    
+
     // Example 3: Lambda endpoint policy for specific scenarios
-    opts.Policies.Add(new LambdaEndpointPolicy<NatsEndpoint>((endpoint, runtime) =>
-    {
-        // Apply JetStream to all application endpoints
-        if (endpoint.Role == EndpointRole.Application)
-        {
-            endpoint.UseJetStream = true;
-            
-            // Use service name in consumer name for better observability
-            if (endpoint.IsListener)
+    opts.Policies.Add(
+        new LambdaEndpointPolicy<NatsEndpoint>(
+            (endpoint, runtime) =>
             {
-                endpoint.ConsumerName = $"{runtime.ServiceName}-{endpoint.Subject.Replace(".", "-")}";
+                // Apply JetStream to all application endpoints
+                if (endpoint.Role == EndpointRole.Application)
+                {
+                    endpoint.UseJetStream = true;
+
+                    // Use service name in consumer name for better observability
+                    if (endpoint.IsListener)
+                    {
+                        endpoint.ConsumerName =
+                            $"{runtime.ServiceName}-{endpoint.Subject.Replace(".", "-")}";
+                    }
+                }
+
+                // High-priority subjects get different configuration
+                if (endpoint.Subject.StartsWith("priority."))
+                {
+                    endpoint.MaxDeliveryAttempts = 5;
+                    endpoint.Mode = EndpointMode.Inline; // Process synchronously
+                }
+
+                // Audit subjects don't need dead letter queues
+                if (endpoint.Subject.StartsWith("audit."))
+                {
+                    endpoint.DeadLetterQueueEnabled = false;
+                }
             }
-        }
-        
-        // High-priority subjects get different configuration
-        if (endpoint.Subject.StartsWith("priority."))
-        {
-            endpoint.MaxDeliveryAttempts = 5;
-            endpoint.Mode = EndpointMode.Inline; // Process synchronously
-        }
-        
-        // Audit subjects don't need dead letter queues
-        if (endpoint.Subject.StartsWith("audit."))
-        {
-            endpoint.DeadLetterQueueEnabled = false;
-        }
-    }));
+        )
+    );
 
     // Example 4: Environment-specific configuration
     if (builder.Environment.IsDevelopment())
@@ -69,9 +72,8 @@ builder.Host.UseWolverine(opts =>
     opts.ListenToNatsSubject("orders.created");
     opts.ListenToNatsSubject("priority.alerts");
     opts.ListenToNatsSubject("audit.events");
-    
-    opts.PublishAllMessages()
-        .ToNatsSubject(type => type.Name.ToLower().Replace(".", "_"));
+
+    opts.PublishAllMessages().ToNatsSubject(type => type.Name.ToLower().Replace(".", "_"));
 });
 
 var app = builder.Build();
@@ -85,18 +87,19 @@ public class NatsJetStreamPolicy : IEndpointPolicy
         if (endpoint is NatsEndpoint natsEndpoint)
         {
             // Only apply to application endpoints, not system ones
-            if (endpoint.Role != EndpointRole.Application) return;
-            
+            if (endpoint.Role != EndpointRole.Application)
+                return;
+
             // Enable JetStream for all NATS endpoints
             natsEndpoint.UseJetStream = true;
-            
+
             // Set stream name based on subject hierarchy
             var parts = natsEndpoint.Subject.Split('.');
             if (parts.Length > 0)
             {
                 natsEndpoint.StreamName = $"{parts[0].ToUpper()}_STREAM";
             }
-            
+
             // Configure consumer settings
             if (natsEndpoint.IsListener)
             {
@@ -116,7 +119,7 @@ public class DevelopmentNatsPolicy : IEndpointPolicy
         {
             // In development, use shorter timeouts and more verbose logging
             endpoint.ExecutionOptions.CancellationTimeout = TimeSpan.FromSeconds(5);
-            
+
             // Disable dead letter queues in development for easier debugging
             natsEndpoint.DeadLetterQueueEnabled = false;
         }
@@ -132,13 +135,13 @@ public class ProductionNatsPolicy : IEndpointPolicy
         {
             // Production settings
             endpoint.ExecutionOptions.CancellationTimeout = TimeSpan.FromSeconds(30);
-            
+
             // Ensure dead letter queues are enabled
             if (natsEndpoint.IsListener)
             {
                 natsEndpoint.DeadLetterQueueEnabled = true;
                 natsEndpoint.MaxDeliveryAttempts = 5;
-                
+
                 // Use a standard dead letter subject pattern
                 if (string.IsNullOrEmpty(natsEndpoint.DeadLetterSubject))
                 {

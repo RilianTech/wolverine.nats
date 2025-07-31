@@ -1,4 +1,3 @@
-using JasperFx.Core;
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
@@ -82,7 +81,7 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
         {
             _jetStreamContext = _connection.CreateJetStreamContext();
             _logger.LogInformation("JetStream context initialized");
-            
+
             // Provision configured streams
             if (Configuration.AutoProvision && Configuration.Streams.Any())
             {
@@ -139,7 +138,10 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
 
     private async Task ProvisionStreamsAsync()
     {
-        _logger?.LogInformation("Provisioning {Count} configured streams", Configuration.Streams.Count);
+        _logger?.LogInformation(
+            "Provisioning {Count} configured streams",
+            Configuration.Streams.Count
+        );
 
         foreach (var (name, config) in Configuration.Streams)
         {
@@ -178,13 +180,19 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
                     };
 
                     await JetStreamContext.CreateStreamAsync(streamConfig);
-                    _logger?.LogInformation("Created stream {StreamName} with subjects: {Subjects}", 
-                        name, string.Join(", ", config.Subjects));
+                    _logger?.LogInformation(
+                        "Created stream {StreamName} with subjects: {Subjects}",
+                        name,
+                        string.Join(", ", config.Subjects)
+                    );
                 }
                 else
                 {
                     // Optionally update stream if configuration has changed
-                    _logger?.LogDebug("Stream {StreamName} already exists, skipping creation", name);
+                    _logger?.LogDebug(
+                        "Stream {StreamName} already exists, skipping creation",
+                        name
+                    );
                 }
             }
             catch (Exception ex)
@@ -194,5 +202,4 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
             }
         }
     }
-
 }

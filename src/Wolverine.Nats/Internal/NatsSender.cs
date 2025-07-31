@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
-using NATS.Net;
-using Wolverine.Runtime;
 using Wolverine.Transports.Sending;
 
 namespace Wolverine.Nats.Internal;
@@ -9,25 +7,41 @@ namespace Wolverine.Nats.Internal;
 public class NatsSender : ISender
 {
     private readonly NatsEndpoint _endpoint;
-    private readonly NatsConnection _connection;
     private readonly ILogger<NatsEndpoint> _logger;
     private readonly NatsEnvelopeMapper _mapper;
     private readonly CancellationToken _cancellation;
+    private readonly INatsPublisher _publisher;
 
-    public NatsSender(
+    internal NatsSender(
         NatsEndpoint endpoint,
-        NatsConnection connection,
+        INatsPublisher publisher,
         ILogger<NatsEndpoint> logger,
         NatsEnvelopeMapper mapper,
         CancellationToken cancellation
     )
     {
         _endpoint = endpoint;
-        _connection = connection;
+        _publisher = publisher;
         _logger = logger;
         _mapper = mapper;
         _cancellation = cancellation;
         Destination = endpoint.Uri;
+    }
+
+    internal static NatsSender Create(
+        NatsEndpoint endpoint,
+        NatsConnection connection,
+        ILogger<NatsEndpoint> logger,
+        NatsEnvelopeMapper mapper,
+        CancellationToken cancellation,
+        bool useJetStream
+    )
+    {
+        INatsPublisher publisher = useJetStream
+            ? new JetStreamPublisher(connection, logger)
+            : new CoreNatsPublisher(connection, logger);
+
+        return new NatsSender(endpoint, publisher, logger, mapper, cancellation);
     }
 
     public bool SupportsNativeScheduledSend => false;
@@ -35,22 +49,7 @@ public class NatsSender : ISender
 
     public async Task<bool> PingAsync()
     {
-        try
-        {
-            // Try to publish a ping message and wait for connection confirmation
-            var pingSubject = $"_INBOX.wolverine.ping.{Guid.NewGuid():N}";
-            await _connection.PublishAsync(
-                pingSubject,
-                Array.Empty<byte>(),
-                cancellationToken: _cancellation
-            );
-            return _connection.ConnectionState == NatsConnectionState.Open;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to ping NATS endpoint {Subject}", _endpoint.Subject);
-            return false;
-        }
+        return await _publisher.PingAsync(_cancellation);
     }
 
     public async ValueTask SendAsync(Envelope envelope)
@@ -117,41 +116,15 @@ public class NatsSender : ISender
                 }
             }
 
-            if (
-                _endpoint.UseJetStream
-                && !string.IsNullOrEmpty(_endpoint.StreamName)
-                && !envelope.IsResponse
-            )
-            {
-                // Use JetStream for publishing (but not for replies)
-                var js = _connection.CreateJetStreamContext();
-                var ack = await js.PublishAsync(
-                    targetSubject,
-                    data,
-                    headers: headers,
-                    cancellationToken: _cancellation
-                );
-
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    _logger.LogDebug(
-                        "Message {MessageId} published to JetStream with sequence {Sequence}",
-                        envelope.Id,
-                        ack.Seq
-                    );
-                }
-            }
-            else
-            {
-                // Use Core NATS for publishing (replies should always use Core NATS)
-                await _connection.PublishAsync(
-                    targetSubject,
-                    data,
-                    headers,
-                    replyTo,
-                    cancellationToken: _cancellation
-                );
-            }
+            // Delegate to the appropriate publisher
+            await _publisher.PublishAsync(
+                targetSubject,
+                data,
+                headers,
+                replyTo,
+                envelope,
+                _cancellation
+            );
         }
         catch (Exception ex)
         {

@@ -1,6 +1,5 @@
 using NATS.Client.Core;
 using NATS.Client.JetStream;
-using NATS.Client.JetStream.Models;
 
 namespace Wolverine.Nats.Configuration;
 
@@ -163,7 +162,7 @@ public class NatsTransportConfiguration
     /// Subject prefix template for tenant isolation (e.g., "tenant.{tenantId}")
     /// </summary>
     public string? TenantSubjectPrefix { get; set; }
-    
+
     /// <summary>
     /// Pre-defined streams to create during initialization
     /// </summary>
@@ -208,7 +207,9 @@ public class NatsTransportConfiguration
     internal NatsJSOpts? ToJetStreamOpts()
     {
         if (!EnableJetStream)
+        {
             return null;
+        }
 
         // NatsJSOpts constructor requires NatsOpts
         // Domain and ApiPrefix are set via constructor parameters

@@ -1,5 +1,3 @@
-using System;
-using Microsoft.Extensions.Primitives;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
 using Wolverine.Runtime.Serialization;
@@ -29,7 +27,9 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
         value = null;
 
         if (incoming.Headers == null)
+        {
             return false;
+        }
 
         if (incoming.Headers.TryGetValue(key, out var values))
         {
@@ -96,7 +96,9 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
         value = null;
 
         if (incoming.Headers == null)
+        {
             return false;
+        }
 
         if (incoming.Headers.TryGetValue(key, out var values))
         {

@@ -21,7 +21,7 @@ public class StreamConfiguration
     public bool AllowDirect { get; set; }
     public bool DenyDelete { get; set; }
     public bool DenyPurge { get; set; }
-    
+
     /// <summary>
     /// Add a subject to this stream
     /// </summary>
@@ -33,7 +33,7 @@ public class StreamConfiguration
         }
         return this;
     }
-    
+
     /// <summary>
     /// Add multiple subjects to this stream
     /// </summary>
@@ -45,19 +45,35 @@ public class StreamConfiguration
         }
         return this;
     }
-    
+
     /// <summary>
     /// Configure retention limits
     /// </summary>
-    public StreamConfiguration WithLimits(int? maxMessages = null, long? maxBytes = null, TimeSpan? maxAge = null)
+    public StreamConfiguration WithLimits(
+        int? maxMessages = null,
+        long? maxBytes = null,
+        TimeSpan? maxAge = null
+    )
     {
         Retention = StreamConfigRetention.Limits;
-        if (maxMessages.HasValue) MaxMessages = maxMessages;
-        if (maxBytes.HasValue) MaxBytes = maxBytes;
-        if (maxAge.HasValue) MaxAge = maxAge;
+        if (maxMessages.HasValue)
+        {
+            MaxMessages = maxMessages;
+        }
+
+        if (maxBytes.HasValue)
+        {
+            MaxBytes = maxBytes;
+        }
+
+        if (maxAge.HasValue)
+        {
+            MaxAge = maxAge;
+        }
+
         return this;
     }
-    
+
     /// <summary>
     /// Configure as work queue (retention by interest)
     /// </summary>
@@ -66,7 +82,7 @@ public class StreamConfiguration
         Retention = StreamConfigRetention.Interest;
         return this;
     }
-    
+
     /// <summary>
     /// Configure for high availability
     /// </summary>

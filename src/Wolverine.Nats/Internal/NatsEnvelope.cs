@@ -1,6 +1,5 @@
 using NATS.Client.Core;
 using NATS.Client.JetStream;
-using Wolverine.Runtime;
 
 namespace Wolverine.Nats.Internal;
 
