@@ -17,7 +17,7 @@ internal class JetStreamSubscriber : INatsSubscriber
     private readonly ILogger<NatsEndpoint> _logger;
     private readonly JetStreamEnvelopeMapper _mapper;
     private readonly INatsJSContext _jetStreamContext;
-    private IAsyncDisposable? _subscription;
+    private INatsJSConsumer? _consumer;
     private Task? _consumerTask;
 
     public JetStreamSubscriber(
@@ -50,7 +50,6 @@ internal class JetStreamSubscriber : INatsSubscriber
         );
 
         // Create or get consumer
-        INatsJSConsumer consumer;
         var config = new ConsumerConfig
         {
             AckPolicy = ConsumerConfigAckPolicy.Explicit,
@@ -79,7 +78,7 @@ internal class JetStreamSubscriber : INatsSubscriber
             // Try to get existing consumer first
             try
             {
-                consumer = await _jetStreamContext.GetConsumerAsync(
+                _consumer = await _jetStreamContext.GetConsumerAsync(
                     _endpoint.StreamName!,
                     _endpoint.ConsumerName,
                     cancellation
@@ -92,7 +91,7 @@ internal class JetStreamSubscriber : INatsSubscriber
             catch (NatsJSException)
             {
                 // Consumer doesn't exist, create it
-                consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
+                _consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
                     _endpoint.StreamName!,
                     config,
                     cancellation
@@ -103,7 +102,7 @@ internal class JetStreamSubscriber : INatsSubscriber
         else
         {
             // Create ephemeral consumer
-            consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
+            _consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
                 _endpoint.StreamName!,
                 config,
                 cancellation
@@ -119,7 +118,7 @@ internal class JetStreamSubscriber : INatsSubscriber
             async () =>
             {
                 await foreach (
-                    var msg in consumer.ConsumeAsync<byte[]>(cancellationToken: cancellation)
+                    var msg in _consumer!.ConsumeAsync<byte[]>(cancellationToken: cancellation)
                 )
                 {
                     try
@@ -145,9 +144,9 @@ internal class JetStreamSubscriber : INatsSubscriber
 
     public async ValueTask DisposeAsync()
     {
-        if (_subscription != null)
+        if (_consumer is IAsyncDisposable disposableConsumer)
         {
-            await _subscription.DisposeAsync();
+            await disposableConsumer.DisposeAsync();
         }
 
         if (_consumerTask != null)
