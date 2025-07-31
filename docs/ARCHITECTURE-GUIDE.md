@@ -242,32 +242,13 @@ opts.ListenToNatsSubject("orders.failures")
 
 ## Monitoring & Observability
 
-### Built-in Metrics
-```bash
-# HTTP endpoint with all metrics
-curl http://localhost:8222/varz
+For comprehensive monitoring and troubleshooting, see [Monitoring & Troubleshooting Guide](./MONITORING-TROUBLESHOOTING.md).
 
-# Connections info
-curl http://localhost:8222/connz
-
-# Routes between servers
-curl http://localhost:8222/routez
-```
-
-### JetStream Monitoring
-```bash
-# Stream info
-nats stream info ORDERS
-
-# Consumer lag
-nats consumer report
-```
-
-### Wolverine Integration
-- Message counters per endpoint
-- Processing duration metrics
-- Error rate tracking
-- Circuit breaker state
+Key observability features:
+- Built-in HTTP metrics endpoint
+- JetStream consumer lag monitoring
+- Wolverine message counters and processing metrics
+- Connection state and error tracking
 
 ## Security Architecture
 

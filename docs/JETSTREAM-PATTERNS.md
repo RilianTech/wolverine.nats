@@ -36,25 +36,12 @@ Max Deliver: 3
 ### Retention Policies
 
 #### Limits (Event Streaming)
-Keep messages based on count/size/age:
-```csharp
-opts.UseJetStream(js => {
-    js.Retention = "limits";
-    js.MaxMessages = 1_000_000;
-    js.MaxAge = TimeSpan.FromDays(30);
-    js.MaxBytes = 1024 * 1024 * 1024; // 1GB
-});
-```
+Keep messages based on count/size/age limits.
 
 #### WorkQueue (Task Processing)  
-Delete messages after acknowledgment:
-```csharp
-opts.UseJetStream(js => {
-    js.Retention = "workqueue";
-    js.MaxDeliver = 3;
-    js.AckWait = TimeSpan.FromMinutes(5);
-});
-```
+Delete messages after acknowledgment.
+
+For detailed JetStream configuration, see [Configuration Guide](./CONFIGURATION.md#jetstream-configuration).
 
 ## Implementation Patterns
 
@@ -277,27 +264,7 @@ public class OrderHandler
 
 ## Monitoring JetStream
 
-### Stream Health
-```bash
-# Check stream status
-nats stream info ORDERS
-
-# Monitor consumer lag
-nats consumer report ORDERS
-
-# Watch message flow
-nats stream view ORDERS
-```
-
-### Wolverine Metrics
-```csharp
-// Custom JetStream metrics
-opts.ConfigureJetStreamMetrics(metrics => {
-    metrics.TrackConsumerLag = true;
-    metrics.TrackStreamSize = true;
-    metrics.TrackMessageAge = true;
-});
-```
+For comprehensive JetStream monitoring and troubleshooting, see [Monitoring & Troubleshooting Guide](./MONITORING-TROUBLESHOOTING.md#jetstream-troubleshooting).
 
 ## Best Practices
 

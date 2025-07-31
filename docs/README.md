@@ -9,12 +9,18 @@ Welcome to the comprehensive documentation for the NATS transport for Wolverine.
 2. **[Quick Start Guide](./QUICK-START.md)** - Get running in 15 minutes
 3. **[Architecture Guide](./ARCHITECTURE-GUIDE.md)** - Deep dive into how it all works
 
+### Configuration & Operations
+4. **[Configuration Guide](./CONFIGURATION.md)** - Complete configuration reference
+5. **[Monitoring & Troubleshooting](./MONITORING-TROUBLESHOOTING.md)** - Debugging and observability
+
 ### Core Features
-4. **[JetStream Patterns](./JETSTREAM-PATTERNS.md)** - Event streaming and work queues
-5. **[Security & Multi-Tenancy](./SECURITY-MULTITENANCY.md)** - Enterprise-grade security
+6. **[JetStream Patterns](./JETSTREAM-PATTERNS.md)** - Event streaming and work queues
+7. **[Security & Multi-Tenancy](./SECURITY-MULTITENANCY.md)** - Enterprise-grade security
 
 ### Advanced Topics
-6. **[IoT Integration](./IOT-INTEGRATION.md)** - Connect devices through MQTT gateway
+8. **[Stream Configuration Guide](./STREAM_CONFIGURATION_GUIDE.md)** - JetStream stream setup
+9. **[IoT Integration](./IOT-INTEGRATION.md)** - Connect devices through MQTT gateway
+10. **[Implementation Reference](./IMPLEMENTATION-REFERENCE.md)** - Developer reference
 
 ## 🚀 Why Choose NATS for Wolverine?
 
@@ -30,22 +36,27 @@ NATS provides unique advantages over traditional message brokers:
 ### For Beginners
 1. Start with [Quick Start](./QUICK-START.md) to get hands-on experience
 2. Read [Why NATS + Wolverine?](./WHY-NATS-WOLVERINE.md) to understand the benefits
-3. Explore basic pub/sub and request/reply patterns
+3. Review [Configuration Guide](./CONFIGURATION.md) for setup options
 
 ### For Architects
 1. Study the [Architecture Guide](./ARCHITECTURE-GUIDE.md) for deep technical understanding
 2. Review [JetStream Patterns](./JETSTREAM-PATTERNS.md) for event streaming
-3. Plan your subject hierarchy and stream design
+3. Plan your subject hierarchy using [Stream Configuration Guide](./STREAM_CONFIGURATION_GUIDE.md)
 
 ### For DevOps/Security
 1. Master [Security & Multi-Tenancy](./SECURITY-MULTITENANCY.md) for production deployments
-2. Understand monitoring and operational patterns
-3. Design authentication and authorization strategies
+2. Learn [Monitoring & Troubleshooting](./MONITORING-TROUBLESHOOTING.md) for operations
+3. Use [Configuration Guide](./CONFIGURATION.md) for environment-specific setups
 
 ### For IoT Developers
 1. Explore [IoT Integration](./IOT-INTEGRATION.md) for device connectivity
-2. Learn MQTT gateway capabilities
+2. Learn MQTT gateway configuration in [Configuration Guide](./CONFIGURATION.md)
 3. Implement edge computing patterns
+
+### For Library Developers
+1. Review [Implementation Reference](./IMPLEMENTATION-REFERENCE.md) for transport internals
+2. Study compliance patterns and testing approaches
+3. Understand Wolverine integration points
 
 ## 💡 Key Concepts
 

@@ -8,87 +8,18 @@ NATS provides the most sophisticated multi-tenancy and security model of any mes
 
 ### Authentication Methods
 
-#### 1. Token Authentication (Simple)
-```csharp
-opts.UseNats("nats://localhost:4222")
-    .WithToken("s3cr3t-t0k3n");
-```
+NATS supports multiple authentication methods. For detailed configuration examples, see [Configuration Guide](./CONFIGURATION.md#authentication-configuration).
 
-#### 2. Username/Password (Basic)
-```csharp
-opts.UseNats("nats://localhost:4222")
-    .WithCredentials("user", "password");
-```
-
-#### 3. NKey Authentication (Recommended)
-```csharp
-// Generate NKey pair
-// nats-box: nk -gen user -pubout
-
-opts.UseNats("nats://localhost:4222")
-    .WithNKey("/path/to/user.nk");
-```
-
-#### 4. JWT Authentication (Enterprise)
-```csharp
-// Using .creds file (contains JWT + NKey)
-opts.UseNats(config => {
-    config.ConnectionString = "nats://connect.ngs.global";
-    config.CredentialsFile = "/path/to/user.creds";
-});
-```
-
-### TLS Configuration
-
-#### Basic TLS
-```csharp
-opts.UseNats("nats://secure.example.com:4443")
-    .UseTls();
-```
-
-#### Mutual TLS (mTLS)
-```csharp
-opts.UseNats(config => {
-    config.ConnectionString = "nats://secure.example.com:4443";
-    config.EnableTls = true;
-    config.ClientCertFile = "/path/to/client-cert.pem";
-    config.ClientKeyFile = "/path/to/client-key.pem";
-    config.CaFile = "/path/to/ca.pem";
-});
-```
+1. **Token Authentication** - Simple shared secret
+2. **Username/Password** - Basic credentials  
+3. **NKey Authentication** - Cryptographic key pairs (recommended)
+4. **JWT Authentication** - Enterprise-grade with hierarchical trust
 
 ## Multi-Tenancy Patterns
 
 ### Phase 1: Subject-Based Multi-Tenancy
 
-The simplest approach using subject prefixes:
-
-```csharp
-// Configure tenant prefix
-public class NatsTenantSubjectResolver : ISubjectResolver
-{
-    public string ResolveSubject(string baseSubject, Envelope envelope)
-    {
-        var tenantId = envelope.TenantId ?? "default";
-        return $"{tenantId}.{baseSubject}";
-    }
-    
-    public string? ExtractTenantId(string subject)
-    {
-        var parts = subject.Split('.');
-        return parts.Length > 1 ? parts[0] : null;
-    }
-}
-
-// Register resolver
-opts.UseNats(config => {
-    config.SubjectResolver = new NatsTenantSubjectResolver();
-});
-
-// Usage - automatically prefixed with tenant ID
-await bus.PublishAsync(new OrderCreated { ... });
-// Published to: acme.orders.created
-```
+The simplest approach using subject prefixes. For implementation details, see [Configuration Guide](./CONFIGURATION.md#multi-tenancy-configuration).
 
 #### Subject Permissions per Tenant
 ```json

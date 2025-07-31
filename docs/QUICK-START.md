@@ -179,42 +179,7 @@ opts.ListenToNatsSubject("orders.*.created")
     .UseQueueGroup("order-handlers");
 ```
 
-### Subject Hierarchies
-
-```csharp
-// Publish to specific subjects
-await bus.PublishAsync(new OrderCreated(), opts => 
-    opts.ToNatsSubject("orders.us-west.created"));
-
-await bus.PublishAsync(new OrderShipped(), opts => 
-    opts.ToNatsSubject("orders.us-west.shipped"));
-```
-
-## Monitoring
-
-### NATS Server Monitoring
-
-```bash
-# View server stats
-curl http://localhost:8222/varz
-
-# Monitor message flow
-nats sub ">"
-
-# Check JetStream streams
-nats stream ls
-```
-
-### Wolverine Metrics
-
-```csharp
-// Add metrics endpoint
-app.MapGet("/metrics", (IMessageBus bus) =>
-{
-    var metrics = bus.GetMetrics();
-    return Results.Ok(metrics);
-});
-```
+For comprehensive configuration options, see [Configuration Guide](./CONFIGURATION.md).
 
 ## Docker Compose Setup
 
@@ -240,34 +205,13 @@ services:
 
 ## Troubleshooting
 
-### Connection Issues
-```csharp
-opts.UseNats(config =>
-{
-    config.ConnectionString = "nats://localhost:4222";
-    config.ConnectTimeout = TimeSpan.FromSeconds(10);
-    // Enable verbose logging
-    config.LoggerFactory = loggerFactory;
-});
-```
+For comprehensive troubleshooting, see [Monitoring & Troubleshooting Guide](./MONITORING-TROUBLESHOOTING.md).
 
-### Message Not Received
-1. Check subject names match exactly
-2. Verify NATS server is running: `nats server check`
-3. Monitor subjects: `nats sub ">"`
-4. Check Wolverine logs for errors
-
-### JetStream Issues
-```bash
-# Check stream status
-nats stream info STREAM_NAME
-
-# View consumer status
-nats consumer info STREAM_NAME CONSUMER_NAME
-
-# Purge messages
-nats stream purge STREAM_NAME
-```
+### Quick Checks
+1. **NATS server running:** `nats server check`
+2. **Connection works:** `nats server ping`
+3. **Subject matches:** `nats sub ">" | grep your-subject`
+4. **Stream exists:** `nats stream ls`
 
 ## Next Steps
 

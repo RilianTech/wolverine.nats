@@ -17,28 +17,7 @@ IoT Device (MQTT) → NATS Server (MQTT Gateway) → Wolverine Services (NATS)
 
 ### Basic Setup
 
-```yaml
-# nats-server.conf
-mqtt {
-  port: 1883
-  
-  # TLS for secure MQTT
-  tls {
-    cert_file: "/path/to/mqtt-cert.pem"
-    key_file: "/path/to/mqtt-key.pem"
-  }
-  
-  # Authentication
-  authorization {
-    username: "mqtt-user"
-    password: "mqtt-pass"
-  }
-  
-  # Connection limits
-  max_clients: 10000
-  max_pending_size: 10MB
-}
-```
+For detailed MQTT gateway configuration, see [Configuration Guide](./CONFIGURATION.md#iot-and-mqtt-gateway-configuration).
 
 ### Topic Translation Rules
 

@@ -2,6 +2,8 @@
 
 This guide explains how to configure NATS JetStream streams in Wolverine.Nats, including the new configuration helpers that make stream setup easier and help prevent common configuration errors.
 
+For basic JetStream configuration, see [Configuration Guide](./CONFIGURATION.md#jetstream-configuration).
+
 ## Overview
 
 NATS JetStream streams are persistent, replicated data stores that retain messages according to configured policies. Wolverine.Nats provides several ways to configure streams:
@@ -82,6 +84,8 @@ NATS enforces subject uniqueness including:
 - Exact subject matches
 - Wildcard conflicts (`*` and `>`)
 - Overlapping subject hierarchies
+
+For troubleshooting subject conflicts, see [Monitoring & Troubleshooting Guide](./MONITORING-TROUBLESHOOTING.md#jetstream-troubleshooting).
 
 ## Complete Example
 
