@@ -88,18 +88,20 @@ public class NatsSender : ISender
             }
             else
             {
-                // This is a request message, set reply-to if available
-                if (envelope.ReplyUri != null)
+                // Only set reply-to for actual request/reply patterns (when a reply is expected)
+                // ReplyRequested indicates this is an InvokeAsync call expecting a response
+                if (envelope.ReplyRequested != null && envelope.ReplyUri != null)
                 {
                     replyTo = NatsTransport.ExtractSubjectFromUri(envelope.ReplyUri);
 
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
                         _logger.LogDebug(
-                            "Sending request message {MessageId} to NATS subject {Subject} with reply-to {ReplyTo}",
+                            "Sending request message {MessageId} to NATS subject {Subject} with reply-to {ReplyTo} (expecting {ReplyType})",
                             envelope.Id,
                             targetSubject,
-                            replyTo
+                            replyTo,
+                            envelope.ReplyRequested
                         );
                     }
                 }

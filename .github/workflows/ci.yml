@@ -66,15 +66,25 @@ jobs:
         
   integration-tests:
     runs-on: ubuntu-latest
-    services:
-      nats:
-        image: nats:latest
-        ports:
-          - 4222:4222
-        options: --name nats-server
     
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Start NATS with custom configuration
+      run: |
+        docker run -d \
+          --name nats-server \
+          -p 4222:4222 \
+          -p 8222:8222 \
+          -v ${{ github.workspace }}/nats.conf:/etc/nats/nats.conf \
+          nats:latest \
+          -c /etc/nats/nats.conf
+        
+        # Wait for NATS to be ready
+        sleep 2
+        
+        # Check if NATS is running
+        docker logs nats-server
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -91,6 +101,10 @@ jobs:
       run: dotnet test --no-build --configuration Release --filter "Category=Integration" --framework net9.0
       env:
         NATS_URL: nats://localhost:4222
+    
+    - name: Stop NATS
+      if: always()
+      run: docker stop nats-server || true
 
   # Uncomment this job when ready to publish to NuGet
   # publish:

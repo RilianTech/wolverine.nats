@@ -103,6 +103,7 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
         var tracked = await _sender
             .TrackActivity()
             .AlsoTrack(_receiver)
+            .Timeout(30.Seconds())
             .SendMessageAndWaitAsync(message);
 
         // Assert
@@ -131,6 +132,7 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
             var tracked = await _sender
                 .TrackActivity()
                 .AlsoTrack(_receiver)
+                .Timeout(30.Seconds())
                 .SendMessageAndWaitAsync(message);
 
             tracked.Sent.SingleMessage<TestMessage>().Should().BeEquivalentTo(message);
@@ -185,6 +187,7 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
         var result = await _sender
             .TrackActivity()
             .AlsoTrack(_receiver)
+            .Timeout(30.Seconds())
             .SendMessageAndWaitAsync(message, new DeliveryOptions { ScheduleDelay = 1.Seconds() });
         
         // When using scheduled send with a transport that doesn't support it natively,
