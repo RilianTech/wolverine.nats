@@ -103,6 +103,16 @@ internal class CoreNatsSubscriber : INatsSubscriber
                         {
                             try
                             {
+                                // Skip empty messages - NATS can send empty messages for acknowledgments
+                                if (msg.Data == null || msg.Data.Length == 0)
+                                {
+                                    _logger.LogDebug(
+                                        "Skipping empty NATS message from subject {Subject}",
+                                        msg.Subject
+                                    );
+                                    continue;
+                                }
+
                                 var envelope = new NatsEnvelope(msg, null);
                                 _mapper.MapIncomingToEnvelope(envelope, msg);
 

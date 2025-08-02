@@ -127,6 +127,18 @@ internal class JetStreamSubscriber : INatsSubscriber
                 {
                     try
                     {
+                        // Skip empty messages - NATS can send empty messages for acknowledgments
+                        if (msg.Data == null || msg.Data.Length == 0)
+                        {
+                            _logger.LogDebug(
+                                "Skipping empty JetStream message from subject {Subject}",
+                                msg.Subject
+                            );
+                            // Still need to acknowledge the message in JetStream
+                            await msg.AckAsync(cancellationToken: cancellation);
+                            continue;
+                        }
+
                         var envelope = new NatsEnvelope(null, msg);
                         _mapper.MapIncomingToEnvelope(envelope, msg);
 
