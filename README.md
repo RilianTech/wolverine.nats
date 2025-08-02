@@ -391,6 +391,9 @@ NATS does not support native scheduled send functionality. When using Wolverine'
 
 This differs from NATS JetStream's NAK with delay functionality, which is designed for consumer-side message redelivery rather than producer-side scheduled sending. See [NATS Server Issue #2846](https://github.com/nats-io/nats-server/issues/2846) for more details on NATS's approach to delayed message delivery.
 
+#### Empty Messages
+The NATS protocol supports empty messages (0 byte payload) as documented in the protocol specification. These are valid messages used for signaling where the presence of the message itself is the information. Since Wolverine requires message content for deserialization, the NATS transport skips empty messages at the subscriber level with debug logging.
+
 ## Architecture
 
 This transport follows Wolverine's standard transport patterns:

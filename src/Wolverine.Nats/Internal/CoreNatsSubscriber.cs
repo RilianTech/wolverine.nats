@@ -103,7 +103,12 @@ internal class CoreNatsSubscriber : INatsSubscriber
                         {
                             try
                             {
-                                // Skip empty messages - NATS can send empty messages for acknowledgments
+                                // Skip empty messages - NATS protocol explicitly supports empty messages (0 byte payload)
+                                // as documented in the NATS protocol specification. These are often used for:
+                                // - Signaling/notifications where the message presence itself is the information
+                                // - Acknowledgments in request/reply patterns
+                                // - Keep-alive or heartbeat messages
+                                // Since Wolverine requires message content for deserialization, we skip these messages
                                 if (msg.Data == null || msg.Data.Length == 0)
                                 {
                                     _logger.LogDebug(
