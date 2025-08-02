@@ -67,8 +67,7 @@ public class MultiTenancyTests
                     .AddTenant("tenant2");
 
                 // Listen to the base subject - this will create a wildcard subscription
-                opts.ListenToNatsSubject(baseSubject)
-                    .ProcessInline();
+                opts.ListenToNatsSubject(baseSubject);
                 
                 // Publish to the base subject  
                 opts.PublishMessage<TenantTestMessage>()
@@ -79,20 +78,20 @@ public class MultiTenancyTests
             })
             .StartAsync();
         
-        var bus = host.Services.GetRequiredService<IMessageBus>();
-        
         // Send messages for different tenants
         var msg1 = new TenantTestMessage(Guid.NewGuid(), "Message for tenant 1");
         var msg2 = new TenantTestMessage(Guid.NewGuid(), "Message for tenant 2");
         
         _output.WriteLine($"Sending message {msg1.Id} with tenant1");
-        await bus.PublishAsync(msg1, new DeliveryOptions { TenantId = "tenant1" });
-        
         _output.WriteLine($"Sending message {msg2.Id} with tenant2");
+        
+        // Send messages
+        var bus = host.Services.GetRequiredService<IMessageBus>();
+        await bus.PublishAsync(msg1, new DeliveryOptions { TenantId = "tenant1" });
         await bus.PublishAsync(msg2, new DeliveryOptions { TenantId = "tenant2" });
         
-        // Wait longer for messages to be processed (CI might be slower)
-        await Task.Delay(2000);
+        // Wait for processing - increase delay for CI
+        await Task.Delay(3000);
         
         _output.WriteLine($"Received {receivedMessages.Count} messages");
         foreach (var (tenantId, msg) in receivedMessages)
@@ -224,6 +223,7 @@ public class TenantMessageHandler
         _receivedMessages.Add((envelope.TenantId, message));
     }
 }
+
 
 public class TenantMessageHandlerWithSubject
 {
