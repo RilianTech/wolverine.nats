@@ -18,6 +18,7 @@
     </PackageReference>
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Meziantou.Extensions.Logging.Xunit" />
   </ItemGroup>
 
   <ItemGroup>

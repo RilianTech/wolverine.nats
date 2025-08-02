@@ -18,6 +18,10 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
     private NatsConnection? _connection;
     private INatsJSContext? _jetStreamContext;
     private ILogger<NatsTransport>? _logger;
+    
+    // Multi-tenancy support
+    internal JasperFx.Core.LightweightCache<string, NatsTenant> Tenants { get; } = new();
+    internal ITenantSubjectMapper TenantSubjectMapper { get; set; } = new DefaultTenantSubjectMapper();
 
     public NatsTransport()
         : base(ProtocolName, "NATS Transport")

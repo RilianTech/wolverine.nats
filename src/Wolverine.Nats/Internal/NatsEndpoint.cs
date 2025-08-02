@@ -96,8 +96,8 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             _mapper.ReceivesMessage(MessageType);
         }
 
-        // Create the appropriate sender based on configuration
-        return NatsSender.Create(
+        // Create the base sender
+        var baseSender = NatsSender.Create(
             this,
             _connection,
             _logger,
@@ -105,6 +105,50 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             runtime.Cancellation,
             UseJetStream && _transport.Configuration.EnableJetStream
         );
+
+        // If transport has tenants configured and this endpoint is tenant-aware, create a TenantedSender
+        if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
+        {
+            var tenantedSender = new TenantedSender(Uri, _transport.TenantedIdBehavior, baseSender);
+            
+            foreach (var tenant in _transport.Tenants)
+            {
+                // Create a new endpoint with tenant-specific subject
+                var subjectMapper = tenant.SubjectMapper ?? _transport.TenantSubjectMapper;
+                var tenantSubject = subjectMapper.MapSubject(Subject, tenant.TenantId);
+                
+                // Create a new endpoint for this tenant with the mapped subject
+                var tenantEndpoint = new NatsEndpoint(tenantSubject, _transport, Role)
+                {
+                    UseJetStream = UseJetStream,
+                    StreamName = StreamName,
+                    ConsumerName = ConsumerName,
+                    QueueGroup = QueueGroup,
+                    DeadLetterQueueEnabled = DeadLetterQueueEnabled,
+                    DeadLetterSubject = DeadLetterSubject,
+                    MaxDeliveryAttempts = MaxDeliveryAttempts,
+                    MessageType = MessageType,
+                    CustomHeaders = CustomHeaders,
+                    NatsSerializer = NatsSerializer
+                };
+                
+                // Create a sender for the tenant-specific endpoint
+                var tenantSender = NatsSender.Create(
+                    tenantEndpoint,
+                    _connection,
+                    _logger,
+                    _mapper,
+                    runtime.Cancellation,
+                    UseJetStream && _transport.Configuration.EnableJetStream
+                );
+                
+                tenantedSender.RegisterSender(tenant.TenantId, tenantSender);
+            }
+            
+            return tenantedSender;
+        }
+
+        return baseSender;
     }
 
     public override async ValueTask<IListener> BuildListenerAsync(
@@ -123,6 +167,17 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             deadLetterSender = (ISender)runtime.Endpoints.GetOrBuildSendingAgent(dlqEndpoint.Uri);
         }
 
+        // Determine the subscription pattern based on multi-tenancy configuration
+        string subscriptionPattern = Subject;
+        ITenantSubjectMapper? tenantMapper = null;
+        
+        if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
+        {
+            // Use the transport's default mapper or a custom one if configured
+            tenantMapper = _transport.TenantSubjectMapper;
+            subscriptionPattern = tenantMapper.GetSubscriptionPattern(Subject);
+        }
+
         var listener = NatsListener.Create(
             this,
             _connection,
@@ -131,7 +186,9 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             _logger,
             deadLetterSender,
             runtime.Cancellation,
-            UseJetStream && _transport.Configuration.EnableJetStream
+            UseJetStream && _transport.Configuration.EnableJetStream,
+            subscriptionPattern,
+            tenantMapper
         );
 
         await listener.StartAsync();
@@ -255,13 +312,26 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         catch
         {
             // Stream doesn't exist, create it
+            // For multi-tenant endpoints, we need to configure the stream to capture all tenant subjects
+            var subjects = new List<string> { Subject };
+            
+            if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
+            {
+                // Add wildcard pattern to capture tenant-specific subjects
+                var wildcardPattern = _transport.TenantSubjectMapper.GetSubscriptionPattern(Subject);
+                if (wildcardPattern != Subject)
+                {
+                    subjects.Add(wildcardPattern);
+                }
+            }
+            
             logger.LogInformation(
                 "Creating JetStream stream {Stream} for subjects {Subjects}",
                 StreamName,
-                Subject
+                string.Join(", ", subjects)
             );
 
-            var config = new StreamConfig(StreamName, new[] { Subject })
+            var config = new StreamConfig(StreamName, subjects)
             {
                 Retention = StreamConfigRetention.Workqueue, // Delete after ack
                 Discard = StreamConfigDiscard.Old,

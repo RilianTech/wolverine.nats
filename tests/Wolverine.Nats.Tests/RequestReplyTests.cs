@@ -1,9 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
-using NATS.Net;
-using Wolverine;
+using Wolverine.Nats.Tests.Helpers;
 using Wolverine.Tracking;
 using Xunit;
 using Xunit.Abstractions;
@@ -23,18 +21,22 @@ public class RequestReplyTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // Use NATS_URL environment variable or default to local Docker port
+        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4223";
+        
         // Skip tests if NATS server is not available
-        if (!await IsNatsServerAvailable())
+        if (!await IsNatsServerAvailable(natsUrl))
         {
-            _output.WriteLine("NATS server not available at localhost:4222. Skipping integration tests.");
+            _output.WriteLine($"NATS server not available at {natsUrl}. Skipping integration tests.");
             return;
         }
 
         _host = await Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging => logging.AddXunitLogging(_output))
             .UseWolverine(opts =>
             {
                 opts.ServiceName = "RequestReplyTest";
-                opts.UseNats("nats://localhost:4222");
+                opts.UseNats(natsUrl);
 
                 // Configure publishing
                 opts.PublishMessage<PingMessage>().ToNatsSubject("ping.request");
@@ -42,18 +44,14 @@ public class RequestReplyTests : IAsyncLifetime
                 // Configure listening
                 opts.ListenToNatsSubject("ping.request");
             })
-            .ConfigureLogging(logging =>
-            {
-                logging.SetMinimumLevel(LogLevel.Debug);
-            })
             .StartAsync();
     }
 
-    private async Task<bool> IsNatsServerAvailable()
+    private async Task<bool> IsNatsServerAvailable(string natsUrl)
     {
         try
         {
-            await using var connection = new NatsConnection(NatsOpts.Default with { Url = "nats://localhost:4222" });
+            await using var connection = new NatsConnection(NatsOpts.Default with { Url = natsUrl });
             await connection.ConnectAsync();
             return connection.ConnectionState == NatsConnectionState.Open;
         }

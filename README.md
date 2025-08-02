@@ -211,6 +211,15 @@ public class OrderStatusHandler
 }
 ```
 
+## Security & Multi-Tenancy
+
+NATS provides sophisticated security and multi-tenancy features:
+- **Authentication** - Token, Username/Password, NKey, JWT
+- **Account Isolation** - Complete namespace separation
+- **Subject Permissions** - Fine-grained access control
+
+See [Security & Multi-Tenancy Guide](docs/SECURITY-MULTITENANCY.md) for NATS security patterns and [Multi-Tenancy Design](docs/WOLVERINE-MULTITENANCY-DESIGN.md) for planned Wolverine integration.
+
 ## Integration with Existing NATS Infrastructure
 
 The transport maps Wolverine concepts to NATS:
@@ -271,6 +280,30 @@ Dead letter queue configuration is now directly on endpoints:
 | `ConfigureDeadLetterQueue(maxAttempts, dlqSubject)` | Configure DLQ with retry count |
 | `DeadLetterTo(subject)` | Set dead letter subject |
 | `DisableDeadLetterQueueing()` | Disable DLQ handling |
+
+## Running Tests
+
+### Test Framework Execution
+
+The project supports both .NET 8.0 and .NET 9.0. When running tests locally, it's important to specify the target framework to avoid conflicts:
+
+```bash
+# Run tests for a specific framework
+dotnet test --framework net8.0
+dotnet test --framework net9.0
+
+# Run integration tests only (as in CI)
+dotnet test --filter "Category=Integration" --framework net9.0
+
+# Run with full CI configuration
+dotnet test --configuration Release --filter "Category=Integration" --framework net9.0
+```
+
+> **⚠️ Important**: Running `dotnet test` without specifying a framework will execute tests on both .NET 8.0 and .NET 9.0 simultaneously, which can cause test failures due to port conflicts and duplicate message processing. Always specify the `--framework` parameter when running tests locally.
+
+### CI/CD Configuration
+
+The GitHub Actions workflow runs tests separately for each framework to avoid conflicts. See `.github/workflows/ci.yml` for the exact commands used in CI.
 
 ## Getting Started
 
@@ -349,7 +382,7 @@ See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture a
 - **MQTT Gateway Ready** - Works with NATS MQTT gateway out-of-the-box
 
 ### 🚧 Planned Features
-- **Multi-Tenancy** - Account-based isolation (future consideration)
+- **Wolverine Multi-Tenancy Integration** - While NATS supports multi-tenancy through accounts and JWT authentication (which we support), integration with Wolverine's multi-tenancy abstractions (TenantedSender, tenant routing) is planned. See [Multi-Tenancy Design](docs/WOLVERINE-MULTITENANCY-DESIGN.md) for implementation details.
 
 ### ⚠️ Known Limitations
 

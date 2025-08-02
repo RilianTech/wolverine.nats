@@ -16,6 +16,7 @@ internal class JetStreamSubscriber : INatsSubscriber
     private readonly NatsConnection _connection;
     private readonly ILogger<NatsEndpoint> _logger;
     private readonly JetStreamEnvelopeMapper _mapper;
+    private readonly string _subscriptionPattern;
     private readonly INatsJSContext _jetStreamContext;
     private INatsJSConsumer? _consumer;
     private Task? _consumerTask;
@@ -24,13 +25,15 @@ internal class JetStreamSubscriber : INatsSubscriber
         NatsEndpoint endpoint,
         NatsConnection connection,
         ILogger<NatsEndpoint> logger,
-        JetStreamEnvelopeMapper mapper
+        JetStreamEnvelopeMapper mapper,
+        string? subscriptionPattern = null
     )
     {
         _endpoint = endpoint;
         _connection = connection;
         _logger = logger;
         _mapper = mapper;
+        _subscriptionPattern = subscriptionPattern ?? endpoint.Subject;
         _jetStreamContext = connection.CreateJetStreamContext();
     }
 
@@ -43,9 +46,10 @@ internal class JetStreamSubscriber : INatsSubscriber
     )
     {
         _logger.LogInformation(
-            "Starting JetStream listener for stream {Stream}, consumer {Consumer}, subject {Subject}",
+            "Starting JetStream listener for stream {Stream}, consumer {Consumer}, pattern {Pattern} (base subject: {Subject})",
             _endpoint.StreamName,
             _endpoint.ConsumerName ?? "(ephemeral)",
+            _subscriptionPattern,
             _endpoint.Subject
         );
 
@@ -60,7 +64,7 @@ internal class JetStreamSubscriber : INatsSubscriber
         // Only set filter subject if not using a durable consumer
         if (string.IsNullOrEmpty(_endpoint.ConsumerName))
         {
-            config.FilterSubject = _endpoint.Subject;
+            config.FilterSubject = _subscriptionPattern;
         }
 
         if (!string.IsNullOrEmpty(_endpoint.ConsumerName))

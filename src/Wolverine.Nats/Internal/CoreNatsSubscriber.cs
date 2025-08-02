@@ -13,20 +13,23 @@ internal class CoreNatsSubscriber : INatsSubscriber
     private readonly NatsConnection _connection;
     private readonly ILogger<NatsEndpoint> _logger;
     private readonly NatsEnvelopeMapper _mapper;
-    private IAsyncDisposable? _subscription;
-    private Task? _consumerTask;
+    private readonly string _subscriptionPattern;
+    private readonly List<IAsyncDisposable> _subscriptions = new();
+    private readonly List<Task> _consumerTasks = new();
 
     public CoreNatsSubscriber(
         NatsEndpoint endpoint,
         NatsConnection connection,
         ILogger<NatsEndpoint> logger,
-        NatsEnvelopeMapper mapper
+        NatsEnvelopeMapper mapper,
+        string? subscriptionPattern = null
     )
     {
         _endpoint = endpoint;
         _connection = connection;
         _logger = logger;
         _mapper = mapper;
+        _subscriptionPattern = subscriptionPattern ?? endpoint.Subject;
     }
 
     public bool SupportsNativeDeadLetterQueue => false;
@@ -37,77 +40,110 @@ internal class CoreNatsSubscriber : INatsSubscriber
         CancellationToken cancellation
     )
     {
-        _logger.LogInformation(
-            "Starting Core NATS listener for subject {Subject} with queue group {QueueGroup}",
-            _endpoint.Subject,
-            _endpoint.QueueGroup ?? "(none)"
-        );
-
-        if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
+        var patterns = new List<string>();
+        
+        // If this is a multi-tenant subscription, we need to subscribe to both:
+        // 1. The wildcard pattern (e.g., "*.orders") for tenant-specific messages
+        // 2. The base subject (e.g., "orders") for non-tenant messages in fallback mode
+        if (_subscriptionPattern != _endpoint.Subject && _subscriptionPattern.StartsWith("*."))
         {
-            _subscription = await _connection.SubscribeCoreAsync<byte[]>(
+            patterns.Add(_subscriptionPattern); // Wildcard pattern for tenant messages
+            patterns.Add(_endpoint.Subject);    // Base subject for non-tenant messages
+            
+            _logger.LogInformation(
+                "Multi-tenant subscription: listening to patterns '{WildcardPattern}' and '{BaseSubject}' for subject '{Subject}'",
+                _subscriptionPattern,
                 _endpoint.Subject,
-                _endpoint.QueueGroup,
-                cancellationToken: cancellation
+                _endpoint.Subject
             );
         }
         else
         {
-            _subscription = await _connection.SubscribeCoreAsync<byte[]>(
+            patterns.Add(_subscriptionPattern);
+            
+            _logger.LogInformation(
+                "Starting Core NATS listener for pattern {Pattern} (base subject: {Subject}) with queue group {QueueGroup}",
+                _subscriptionPattern,
                 _endpoint.Subject,
-                cancellationToken: cancellation
+                _endpoint.QueueGroup ?? "(none)"
             );
         }
 
-        _consumerTask = Task.Run(
-            async () =>
+        // Create subscriptions for each pattern
+        foreach (var pattern in patterns)
+        {
+            IAsyncDisposable subscription;
+            
+            if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
             {
-                try
-                {
-                    await foreach (
-                        var msg in ((INatsSub<byte[]>)_subscription).Msgs.ReadAllAsync(cancellation)
-                    )
-                    {
-                        try
-                        {
-                            var envelope = new NatsEnvelope(msg, null);
-                            _mapper.MapIncomingToEnvelope(envelope, msg);
+                subscription = await _connection.SubscribeCoreAsync<byte[]>(
+                    pattern,
+                    _endpoint.QueueGroup,
+                    cancellationToken: cancellation
+                );
+            }
+            else
+            {
+                subscription = await _connection.SubscribeCoreAsync<byte[]>(
+                    pattern,
+                    cancellationToken: cancellation
+                );
+            }
+            
+            _subscriptions.Add(subscription);
 
-                            await receiver.ReceivedAsync(listener, envelope);
-                        }
-                        catch (Exception ex)
+            var consumerTask = Task.Run(
+                async () =>
+                {
+                    try
+                    {
+                        await foreach (
+                            var msg in ((INatsSub<byte[]>)subscription).Msgs.ReadAllAsync(cancellation)
+                        )
                         {
-                            _logger.LogError(
-                                ex,
-                                "Error processing NATS message from subject {Subject}",
-                                msg.Subject
-                            );
+                            try
+                            {
+                                var envelope = new NatsEnvelope(msg, null);
+                                _mapper.MapIncomingToEnvelope(envelope, msg);
+
+                                await receiver.ReceivedAsync(listener, envelope);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(
+                                    ex,
+                                    "Error processing NATS message from subject {Subject}",
+                                    msg.Subject
+                                );
+                            }
                         }
                     }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected during shutdown
-                    _logger.LogDebug(
-                        "NATS listener for {Subject} was cancelled",
-                        _endpoint.Subject
-                    );
-                }
-            },
-            cancellation
-        );
+                    catch (OperationCanceledException)
+                    {
+                        // Expected during shutdown
+                        _logger.LogDebug(
+                            "NATS listener for pattern {Pattern} was cancelled",
+                            pattern
+                        );
+                    }
+                },
+                cancellation
+            );
+            
+            _consumerTasks.Add(consumerTask);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_subscription != null)
+        foreach (var subscription in _subscriptions)
         {
-            await _subscription.DisposeAsync();
+            await subscription.DisposeAsync();
         }
 
-        if (_consumerTask != null)
+        if (_consumerTasks.Any())
         {
-            await _consumerTask;
+            await Task.WhenAll(_consumerTasks);
         }
     }
 }

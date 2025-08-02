@@ -1,5 +1,6 @@
 using Wolverine.Nats.Configuration;
 using Wolverine.Transports;
+using Wolverine.Transports.Sending;
 
 namespace Wolverine.Nats.Internal;
 
@@ -161,6 +162,83 @@ public class NatsTransportExpression
                 stream.WithSubjects(subjects).WithReplicas(replicas);
             }
         );
+    }
+
+    /// <summary>
+    ///     Configure multi-tenancy support
+    /// </summary>
+    public NatsTransportExpression ConfigureMultiTenancy(
+        TenantedIdBehavior behavior = TenantedIdBehavior.FallbackToDefault
+    )
+    {
+        Transport.TenantedIdBehavior = behavior;
+        return this;
+    }
+
+    /// <summary>
+    ///     Set a custom tenant-subject mapper
+    /// </summary>
+    public NatsTransportExpression UseTenantSubjectMapper(ITenantSubjectMapper mapper)
+    {
+        Transport.TenantSubjectMapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        return this;
+    }
+
+    /// <summary>
+    ///     Add a tenant with subject-based isolation (simplest approach)
+    /// </summary>
+    public NatsTransportExpression AddTenant(string tenantId)
+    {
+        var tenant = new NatsTenant(tenantId);
+        Transport.Tenants[tenantId] = tenant;
+        return this;
+    }
+
+    /// <summary>
+    ///     Add a tenant with a custom subject mapper
+    /// </summary>
+    public NatsTransportExpression AddTenant(string tenantId, ITenantSubjectMapper mapper)
+    {
+        var tenant = new NatsTenant(tenantId)
+        {
+            SubjectMapper = mapper
+        };
+        Transport.Tenants[tenantId] = tenant;
+        return this;
+    }
+
+    /// <summary>
+    ///     Add a tenant with custom credentials (for future account-based isolation)
+    /// </summary>
+    public NatsTransportExpression AddTenantWithCredentials(
+        string tenantId,
+        string username,
+        string password
+    )
+    {
+        var tenant = new NatsTenant(tenantId)
+        {
+            Username = username,
+            Password = password
+        };
+        Transport.Tenants[tenantId] = tenant;
+        return this;
+    }
+
+    /// <summary>
+    ///     Add a tenant with JWT credentials file (for future account-based isolation)
+    /// </summary>
+    public NatsTransportExpression AddTenantWithCredentialsFile(
+        string tenantId,
+        string credentialsFile
+    )
+    {
+        var tenant = new NatsTenant(tenantId)
+        {
+            CredentialsFile = credentialsFile
+        };
+        Transport.Tenants[tenantId] = tenant;
+        return this;
     }
 
     protected override NatsListenerConfiguration createListenerExpression(

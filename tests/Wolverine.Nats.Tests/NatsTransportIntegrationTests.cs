@@ -1,14 +1,12 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using JasperFx.Core;
-using Wolverine;
 using Wolverine.Nats.Internal;
+using Wolverine.Nats.Tests.Helpers;
 using Wolverine.Runtime;
 using Wolverine.Tracking;
 using Xunit;
+using Xunit.Abstractions;
 using FluentAssertions;
 
 namespace Wolverine.Nats.Tests;
@@ -17,10 +15,16 @@ namespace Wolverine.Nats.Tests;
 [Trait("Category", "Integration")]
 public class NatsTransportIntegrationTests : IAsyncLifetime
 {
+    private readonly ITestOutputHelper _output;
     private IHost? _sender;
     private IHost? _receiver;
     private static int _counter = 0;
     private string _receiverSubject = "";
+
+    public NatsTransportIntegrationTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
 
     public async Task InitializeAsync()
     {
@@ -56,6 +60,7 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
         _receiverSubject = $"test.receiver.{number}";
 
         _sender = await Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging => logging.AddXunitLogging(_output))
             .UseWolverine(opts =>
             {
                 opts.ServiceName = "Sender";
@@ -65,6 +70,7 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
             .StartAsync();
 
         _receiver = await Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging => logging.AddXunitLogging(_output))
             .UseWolverine(opts =>
             {
                 opts.ServiceName = "Receiver";

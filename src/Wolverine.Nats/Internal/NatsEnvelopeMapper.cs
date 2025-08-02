@@ -7,10 +7,12 @@ namespace Wolverine.Nats.Internal;
 
 public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 {
-    public NatsEnvelopeMapper(NatsEndpoint endpoint)
+    private readonly ITenantSubjectMapper? _tenantMapper;
+    
+    public NatsEnvelopeMapper(NatsEndpoint endpoint, ITenantSubjectMapper? tenantMapper = null)
         : base(endpoint)
     {
-        // Additional mappings specific to NATS can be added here if needed
+        _tenantMapper = tenantMapper;
     }
 
     protected override void writeOutgoingHeader(NatsHeaders headers, string key, string value)
@@ -47,6 +49,16 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 
         // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
+        
+        // Extract tenant ID from the subject if tenant mapper is configured
+        if (_tenantMapper != null)
+        {
+            var tenantId = _tenantMapper.ExtractTenantId(incoming.Subject);
+            if (tenantId != null)
+            {
+                envelope.TenantId = tenantId;
+            }
+        }
 
         // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))
@@ -76,10 +88,12 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 // Separate mapper for JetStream messages
 public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHeaders>
 {
-    public JetStreamEnvelopeMapper(NatsEndpoint endpoint)
+    private readonly ITenantSubjectMapper? _tenantMapper;
+    
+    public JetStreamEnvelopeMapper(NatsEndpoint endpoint, ITenantSubjectMapper? tenantMapper = null)
         : base(endpoint)
     {
-        // Additional mappings specific to JetStream can be added here if needed
+        _tenantMapper = tenantMapper;
     }
 
     protected override void writeOutgoingHeader(NatsHeaders headers, string key, string value)
@@ -116,6 +130,16 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
 
         // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
+        
+        // Extract tenant ID from the subject if tenant mapper is configured
+        if (_tenantMapper != null)
+        {
+            var tenantId = _tenantMapper.ExtractTenantId(incoming.Subject);
+            if (tenantId != null)
+            {
+                envelope.TenantId = tenantId;
+            }
+        }
 
         // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))

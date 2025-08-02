@@ -177,27 +177,29 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         ILogger<NatsEndpoint> logger,
         ISender? deadLetterSender,
         CancellationToken cancellation,
-        bool useJetStream
+        bool useJetStream,
+        string? subscriptionPattern = null,
+        ITenantSubjectMapper? tenantMapper = null
     )
     {
         INatsSubscriber subscriber;
         if (useJetStream)
         {
-            var jsMapper = new JetStreamEnvelopeMapper(endpoint);
+            var jsMapper = new JetStreamEnvelopeMapper(endpoint, tenantMapper);
             if (endpoint.MessageType != null)
             {
                 jsMapper.ReceivesMessage(endpoint.MessageType);
             }
-            subscriber = new JetStreamSubscriber(endpoint, connection, logger, jsMapper);
+            subscriber = new JetStreamSubscriber(endpoint, connection, logger, jsMapper, subscriptionPattern);
         }
         else
         {
-            var mapper = new NatsEnvelopeMapper(endpoint);
+            var mapper = new NatsEnvelopeMapper(endpoint, tenantMapper);
             if (endpoint.MessageType != null)
             {
                 mapper.ReceivesMessage(endpoint.MessageType);
             }
-            subscriber = new CoreNatsSubscriber(endpoint, connection, logger, mapper);
+            subscriber = new CoreNatsSubscriber(endpoint, connection, logger, mapper, subscriptionPattern);
         }
 
         return new NatsListener(
