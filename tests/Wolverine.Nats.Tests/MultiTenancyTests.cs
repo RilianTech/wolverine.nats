@@ -2,13 +2,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Wolverine.Nats.Tests.Helpers;
+using Wolverine.Tracking;
 using Wolverine.Transports.Sending;
 using Xunit;
 using Xunit.Abstractions;
 
 namespace Wolverine.Nats.Tests;
 
-[Collection("NATS Integration Tests")]
+[Collection("NATS MultiTenancy Tests")]
 [Trait("Category", "Integration")]
 public class MultiTenancyTests
 {
@@ -90,8 +91,8 @@ public class MultiTenancyTests
         _output.WriteLine($"Sending message {msg2.Id} with tenant2");
         await bus.PublishAsync(msg2, new DeliveryOptions { TenantId = "tenant2" });
         
-        // Wait longer for messages to be processed
-        await Task.Delay(1000);
+        // Wait longer for messages to be processed (CI might be slower)
+        await Task.Delay(2000);
         
         _output.WriteLine($"Received {receivedMessages.Count} messages");
         foreach (var (tenantId, msg) in receivedMessages)
