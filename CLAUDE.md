@@ -31,13 +31,13 @@ We are building a NATS transport SDK for the Wolverine messaging framework. This
 - Using centralized package management with Directory.Packages.props
 - Multi-targeting for .NET 8 and .NET 9
 
-## Reference Code Locations
-- Wolverine source: `../wolverine`
-- NATS reference implementation: `../nats.net`
+## Optional Reference Code Locations
+These paths are optional and only needed for deeper investigation of framework internals:
+- Wolverine source: `../wolverine` (if cloned alongside this repository)
+- NATS.NET client source: `../nats.net` (official NATS client library)
 
 ## Build Commands
 ```bash
-# From the repository root
 dotnet build
 dotnet test
 ```
