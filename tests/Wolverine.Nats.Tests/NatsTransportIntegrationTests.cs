@@ -29,19 +29,19 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         // In CI, NATS_URL is set to use port 4222
-        // Locally, we'll try 4223 first (docker-compose), then 4222 (if running locally)
+        // Locally, we'll try 4222 first (default), then 4223 (docker-compose)
         var natsUrl = Environment.GetEnvironmentVariable("NATS_URL");
 
         if (string.IsNullOrEmpty(natsUrl))
         {
-            // Try docker-compose port first
-            if (await IsNatsAvailable("nats://localhost:4223"))
-            {
-                natsUrl = "nats://localhost:4223";
-            }
-            else if (await IsNatsAvailable("nats://localhost:4222"))
+            // Try default port first (for CI compatibility)
+            if (await IsNatsAvailable("nats://localhost:4222"))
             {
                 natsUrl = "nats://localhost:4222";
+            }
+            else if (await IsNatsAvailable("nats://localhost:4223"))
+            {
+                natsUrl = "nats://localhost:4223";
             }
             else
             {

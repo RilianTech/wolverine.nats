@@ -44,7 +44,7 @@ public class MultiTenancyTests
     [Fact]
     public async Task messages_are_routed_by_tenant()
     {
-        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4223";
+        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
         var baseSubject = $"test.multitenancy.{Guid.NewGuid():N}";
         
         _output.WriteLine($"Using NATS URL: {natsUrl}");
@@ -110,7 +110,7 @@ public class MultiTenancyTests
     [Fact]
     public async Task tenant_id_required_behavior_latches_sending_agent()
     {
-        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4223";
+        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
         var baseSubject = $"test.required.{Guid.NewGuid():N}";
         
         using var host = await Host.CreateDefaultBuilder()
@@ -147,7 +147,7 @@ public class MultiTenancyTests
     [Fact]
     public async Task fallback_to_default_behavior_sends_to_base_subject()
     {
-        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4223";
+        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
         var baseSubject = $"test.fallback.{Guid.NewGuid():N}";
         
         var receivedMessages = new List<(string? TenantId, TenantTestMessage Message)>();
