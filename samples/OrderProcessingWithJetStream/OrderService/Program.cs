@@ -20,58 +20,54 @@ builder.Services.AddSingleton<IOrderRepository, InMemoryOrderRepository>();
 // Configure Wolverine with NATS JetStream
 builder.Host.UseWolverine(opts =>
 {
-    // Configure NATS transport with JetStream
-    var natsUrl = builder.Configuration["NATS_URL"] ?? 
-                  Environment.GetEnvironmentVariable("NATS_URL") ?? 
-                  "nats://localhost:4222";
-    var natsTransport = opts.UseNats(natsUrl)
+    // Configure NATS transport using configuration
+    var natsTransport = opts.UseNats(builder.Configuration)
         // Define the ORDERS stream with all subjects it will handle
-        .DefineStream("ORDERS", stream =>
-        {
-            stream.WithSubjects(
-                "orders.>",              // All order-related subjects
-                "payment.>",             // Payment events 
-                "inventory.>"            // Inventory events
-            )
-            .WithLimits(
-                maxMessages: 1_000_000,  // 1M messages max
-                maxBytes: 1024L * 1024 * 1024, // 1GB storage
-                maxAge: TimeSpan.FromDays(30)  // 30 days retention
-            )
-            .WithReplicas(1);  // Single replica for development
-        })
+        .DefineStream(
+            "ORDERS",
+            stream =>
+            {
+                stream
+                    .WithSubjects(
+                        "orders.>", // All order-related subjects
+                        "payment.>", // Payment events
+                        "inventory.>" // Inventory events
+                    )
+                    .WithLimits(
+                        maxMessages: 1_000_000, // 1M messages max
+                        maxBytes: 1024L * 1024 * 1024, // 1GB storage
+                        maxAge: TimeSpan.FromDays(30) // 30 days retention
+                    )
+                    .WithReplicas(1); // Single replica for development
+            }
+        )
         .ConfigureListeners(listener =>
         {
             // Default all listeners to use JetStream with ORDERS stream
-            listener.UseJetStream("ORDERS", "order-service")
-                    .UseQueueGroup("order-service")
-                    .ConfigureDeadLetterQueue(3);
+            listener
+                .UseJetStream("ORDERS", "order-service")
+                .UseQueueGroup("order-service")
+                .ConfigureDeadLetterQueue(3);
         })
         .ConfigureSenders(sender =>
         {
-            // Default all senders to use JetStream with ORDERS stream  
+            // Default all senders to use JetStream with ORDERS stream
             sender.UseJetStream("ORDERS");
         });
 
     // Publish events to specific subjects based on event type
     // Note: These will automatically use JetStream with ORDERS stream from our default configuration
-    opts.PublishMessage<OrderCreated>()
-        .ToNatsSubject("orders.created");
+    opts.PublishMessage<OrderCreated>().ToNatsSubject("orders.created");
 
-    opts.PublishMessage<OrderCancelled>()
-        .ToNatsSubject("orders.cancelled");
+    opts.PublishMessage<OrderCancelled>().ToNatsSubject("orders.cancelled");
 
-    opts.PublishMessage<InventoryReserved>()
-        .ToNatsSubject("orders.inventory.reserved");
+    opts.PublishMessage<InventoryReserved>().ToNatsSubject("orders.inventory.reserved");
 
-    opts.PublishMessage<InventoryReservationFailed>()
-        .ToNatsSubject("orders.inventory.failed");
+    opts.PublishMessage<InventoryReservationFailed>().ToNatsSubject("orders.inventory.failed");
 
-    opts.PublishMessage<PaymentRequested>()
-        .ToNatsSubject("orders.payment.requested");
+    opts.PublishMessage<PaymentRequested>().ToNatsSubject("orders.payment.requested");
 
-    opts.PublishMessage<OrderStatusChanged>()
-        .ToNatsSubject("orders.status.changed");
+    opts.PublishMessage<OrderStatusChanged>().ToNatsSubject("orders.status.changed");
 
     // Listen for events that affect order status
     // Note: These will automatically use JetStream, ORDERS stream, order-service consumer, and queue group
@@ -80,12 +76,12 @@ builder.Host.UseWolverine(opts =>
     opts.ListenToNatsSubject("orders.payment.>");
 
     opts.ListenToNatsSubject("orders.shipping.>");
-        
+
     // Configure error handling
     opts.OnException<InvalidOperationException>()
         .MoveToErrorQueue()
         .AndPauseProcessing(TimeSpan.FromSeconds(30));
-        
+
     // Enable console logging
     opts.Services.AddLogging(logging =>
     {

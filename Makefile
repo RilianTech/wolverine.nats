@@ -1,5 +1,11 @@
 # Wolverine.Nats Makefile
 # Provides convenient commands for building, testing, and managing the development environment
+#
+# Configuration:
+# - Applications use appsettings.json for NATS configuration (under Wolverine:Nats section)
+# - NATS_URL environment variable overrides appsettings.json (useful for CI/CD)
+# - Tests use NATS_URL environment variable directly
+# - Default connection: nats://localhost:4222
 
 .PHONY: all help check-docker nats-start nats-stop nats-clean nats-status nats-logs \
         restore build test test-integration test-all test-specific clean clean-all \
@@ -111,7 +117,10 @@ test: build ## Run unit tests (non-integration tests)
 	@dotnet test --configuration $(DOTNET_CONFIG) --no-build --filter "Category!=Integration" --framework $(DOTNET_FRAMEWORK)
 
 # Run integration tests
-# Note: If you have NATS running on a different port, use: NATS_URL=nats://localhost:YOUR_PORT make test-integration
+# Note: NATS_URL environment variable takes precedence over appsettings.json
+# Examples:
+#   make test-integration                    # Uses default port 4222
+#   NATS_URL=nats://localhost:4223 make test-integration  # Use custom port
 .PHONY: test-integration
 test-integration: build ## Run integration tests (requires NATS)
 	@if ! nc -z localhost $(NATS_PORT) 2>/dev/null; then \

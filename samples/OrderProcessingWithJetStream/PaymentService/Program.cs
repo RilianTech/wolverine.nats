@@ -14,9 +14,8 @@ var builder = Host.CreateApplicationBuilder(args);
 // Configure Wolverine with NATS JetStream
 builder.UseWolverine(opts =>
 {
-    // Configure NATS transport with defaults for all endpoints
-    var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
-    opts.UseNats(natsUrl)
+    // Configure NATS transport using configuration
+    opts.UseNats(builder.Configuration)
         // Define the ORDERS stream (will only create if doesn't exist)
         .DefineStream("ORDERS", stream =>
         {

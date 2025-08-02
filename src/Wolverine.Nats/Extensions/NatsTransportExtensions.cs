@@ -1,4 +1,5 @@
 using JasperFx.Core.Reflection;
+using Microsoft.Extensions.Configuration;
 using Wolverine.Configuration;
 using Wolverine.Nats.Configuration;
 using Wolverine.Nats.Internal;
@@ -38,6 +39,41 @@ public static class NatsTransportExtensions
     {
         var transport = options.NatsTransport();
         configure(transport.Configuration);
+        return new NatsTransportExpression(transport, options);
+    }
+
+    /// <summary>
+    /// Configure Wolverine to use NATS as a message transport using IConfiguration
+    /// Reads configuration from "Wolverine:Nats" section
+    /// </summary>
+    public static NatsTransportExpression UseNats(
+        this WolverineOptions options,
+        IConfiguration configuration
+    )
+    {
+        var transport = options.NatsTransport();
+
+        // First try to bind from Wolverine:Nats section (proper nested configuration)
+        var wolverineSection = configuration.GetSection("Wolverine:Nats");
+        if (wolverineSection.Exists())
+        {
+            wolverineSection.Bind(transport.Configuration);
+        }
+
+        // Fall back to root-level Nats section for backward compatibility
+        var natsSection = configuration.GetSection("Nats");
+        if (natsSection.Exists() && !wolverineSection.Exists())
+        {
+            natsSection.Bind(transport.Configuration);
+        }
+
+        // Override with environment variable if set (for containers/cloud deployments)
+        var envUrl = Environment.GetEnvironmentVariable("NATS_URL");
+        if (!string.IsNullOrEmpty(envUrl))
+        {
+            transport.Configuration.ConnectionString = envUrl;
+        }
+
         return new NatsTransportExpression(transport, options);
     }
 

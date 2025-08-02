@@ -22,28 +22,83 @@ dotnet add package Wolverine.Nats
 
 ## Quick Start
 
-### Basic Configuration
+### Configuration Options
+
+There are multiple ways to configure the NATS transport:
+
+#### 1. Using ASP.NET Core Configuration (Recommended)
+
+```csharp
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.UseWolverine(opts =>
+{
+    // Automatically reads from appsettings.json
+    opts.UseNats(builder.Configuration)
+        .AutoProvision();  // Auto-create streams and consumers
+
+    // Configure endpoints...
+    opts.PublishMessage<OrderPlaced>()
+        .ToNatsSubject("orders.placed");
+});
+```
+
+Configure in `appsettings.json`:
+```json
+{
+  "Wolverine": {
+    "Nats": {
+      "ConnectionString": "nats://localhost:4222",
+      "ClientName": "my-service",
+      "EnableJetStream": true,
+      "AutoProvision": true,
+      "JetStreamDefaults": {
+        "MaxMessages": 100000,
+        "MaxAge": "7.00:00:00"
+      }
+    }
+  }
+}
+```
+
+**Configuration Priority:**
+1. Environment variable `NATS_URL` (highest priority - useful for containers)
+2. `appsettings.json` configuration
+3. Default value `nats://localhost:4222`
+
+The environment variable always wins, making it easy to override in different environments:
+```bash
+# Override the connection string for a different environment
+NATS_URL=nats://prod-server:4222 dotnet run
+```
+
+#### 2. Using Connection String
 
 ```csharp
 using var host = Host.CreateDefaultBuilder()
     .UseWolverine(opts =>
     {
-        // Connect to NATS with fluent configuration
+        // Connect to NATS with connection string
         opts.UseNats("nats://localhost:4222")
-            .AutoProvision()  // Auto-create streams and consumers
-            .UseJetStream(js =>
-            {
-                js.MaxMessages = 100_000;
-                js.MaxAge = TimeSpan.FromDays(7);
-            });
+            .AutoProvision();  // Auto-create streams and consumers
+    })
+    .Build();
+```
 
-        // Publish messages to a subject
-        opts.PublishMessage<OrderPlaced>()
-            .ToNatsSubject("orders.placed");
+#### 3. Using Fluent Configuration
 
-        // Listen to messages from a subject
-        opts.ListenToNatsSubject("orders.placed")
-            .ProcessInline();
+```csharp
+using var host = Host.CreateDefaultBuilder()
+    .UseWolverine(opts =>
+    {
+        // Configure with lambda
+        opts.UseNats(config =>
+        {
+            config.ConnectionString = "nats://localhost:4222";
+            config.Username = "user";
+            config.Password = "pass";
+            config.EnableJetStream = true;
+        });
     })
     .Build();
 ```

@@ -5,14 +5,15 @@ using Microsoft.Extensions.Logging;
 using Wolverine;
 using Wolverine.Nats;
 
-await Host.CreateDefaultBuilder(args)
+var builder = Host.CreateApplicationBuilder(args);
+
+await builder
     .UseWolverine(opts =>
     {
         opts.ApplicationAssembly = typeof(Program).Assembly;
 
-        // Configure NATS transport
-        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
-        opts.UseNats(natsUrl);
+        // Configure NATS transport using configuration
+        opts.UseNats(builder.Configuration);
 
         // Listen to ping messages
         opts.ListenToNatsSubject("pings");

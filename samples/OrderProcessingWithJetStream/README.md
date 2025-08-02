@@ -22,7 +22,7 @@ All services communicate through NATS JetStream using the ORDERS stream.
 The OrderService demonstrates using the new stream configuration helpers:
 
 ```csharp
-opts.UseNats(natsUrl)  // Uses NATS_URL env var or defaults to localhost:4222
+opts.UseNats(natsUrl)  // Uses Nats:Url from config, NATS_URL env var, or defaults to localhost:4222
     .DefineStream("ORDERS", stream =>
     {
         stream.WithSubjects(
@@ -42,11 +42,22 @@ opts.UseNats(natsUrl)  // Uses NATS_URL env var or defaults to localhost:4222
 ## Configuration
 
 The services use the following connection string priority:
-1. `NATS_URL` in appsettings.json (OrderService only)
+1. `Nats:Url` in appsettings.json (all services)
 2. `NATS_URL` environment variable
 3. Default: `nats://localhost:4222`
 
-To use a custom NATS server:
+To use a custom NATS server, you can either:
+
+1. Edit `appsettings.json` in each service:
+```json
+{
+  "Nats": {
+    "Url": "nats://your-server:4222"
+  }
+}
+```
+
+2. Or set the environment variable:
 ```bash
 export NATS_URL=nats://your-server:4222
 dotnet run
