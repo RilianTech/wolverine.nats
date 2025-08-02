@@ -275,14 +275,16 @@ docker compose logs wolverine-nats-test
 # Check health
 docker compose ps
 
-# Access monitoring at http://localhost:8223
+# Access monitoring at http://localhost:8222
 ```
 
 **Docker Configuration:**
-- **Port**: 4223 (mapped from container's 4222)
-- **Monitoring**: 8223 (mapped from container's 8222)
+- **Port**: 4222 (standard NATS port)
+- **Monitoring**: 8222 (NATS monitoring interface)
 - **JetStream**: Enabled with 1GB memory, 10GB file storage
 - **Data**: Persisted in Docker volume `wolverine-nats-data`
+
+> **Note**: If you have NATS running locally on port 4222, copy `docker-compose.override.yml.example` to `docker-compose.override.yml` to use alternative ports.
 
 **Cleanup:**
 ```bash

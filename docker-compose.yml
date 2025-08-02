@@ -3,9 +3,9 @@ services:
     container_name: wolverine-nats-test
     image: nats:2.10-alpine
     ports:
-      - "4223:4222"  # Client connections (different port)  
-      - "8223:8222"  # HTTP monitoring (different port)
-      - "6223:6222"  # Cluster routing (different port)
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # HTTP monitoring
+      - "6222:6222"  # Cluster routing
     volumes:
       - ./nats.conf:/etc/nats/nats.conf:ro
       - wolverine-nats-data:/data
