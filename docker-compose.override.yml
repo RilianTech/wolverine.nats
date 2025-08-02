@@ -1,0 +1,23 @@
+services:
+  wolverine-nats-test:
+    container_name: wolverine-nats-test
+    image: nats:2.10-alpine
+    ports:
+      - "4223:4222"  # Client connections on 4223 instead of 4222
+      - "8223:8222"  # HTTP monitoring on 8223 instead of 8222
+      - "6223:6222"  # Cluster routing on 6223 instead of 6222
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - wolverine-nats-data:/data
+    command: ["-c", "/etc/nats/nats.conf"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nats", "server", "check", "--server", "nats://localhost:4222"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  wolverine-nats-data:
+    driver: local

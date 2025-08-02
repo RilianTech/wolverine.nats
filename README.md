@@ -354,7 +354,7 @@ docker compose ps
 - **JetStream**: Enabled with 1GB memory, 10GB file storage
 - **Data**: Persisted in Docker volume `wolverine-nats-data`
 
-> **Note**: If you have NATS running locally on port 4222, copy `docker-compose.override.yml.example` to `docker-compose.override.yml` to use alternative ports.
+> **Note**: If you have NATS running locally on port 4222, use the `docker-compose.override.yml` file which runs NATS on alternative ports (4223, 8223, 6223).
 
 **Cleanup:**
 ```bash
