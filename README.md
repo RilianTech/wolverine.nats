@@ -191,11 +191,24 @@ public class OrderPlacedHandler
 
 ### Request/Reply
 
-> **Note**: Request/Reply pattern implementation is planned for a future release.
-
 ```csharp
-// Will be supported in future version
+// Send a request and wait for a response
 var response = await bus.InvokeAsync<OrderStatus>(new GetOrderStatus { OrderId = 123 });
+
+// Or with timeout
+var response = await bus.InvokeAsync<OrderStatus>(
+    new GetOrderStatus { OrderId = 123 },
+    timeout: TimeSpan.FromSeconds(30)
+);
+
+// Handler automatically sends the response back
+public class OrderStatusHandler
+{
+    public OrderStatus Handle(GetOrderStatus query)
+    {
+        return new OrderStatus { OrderId = query.OrderId, Status = "Shipped" };
+    }
+}
 ```
 
 ## Integration with Existing NATS Infrastructure
@@ -328,6 +341,7 @@ See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture a
 ### ✅ Completed Features
 - **Core NATS Transport** - Full pub/sub messaging support
 - **JetStream Integration** - Durable messaging with stream management
+- **Request/Reply Pattern** - `InvokeAsync<T>` support with automatic correlation
 - **Dead Letter Queue** - Configurable retry and error handling
 - **Queue Groups** - Load balancing across consumers
 - **Stream Lifecycle** - Automatic stream and consumer management
@@ -335,7 +349,6 @@ See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture a
 - **MQTT Gateway Ready** - Works with NATS MQTT gateway out-of-the-box
 
 ### 🚧 Planned Features
-- **Request/Reply Pattern** - `InvokeAsync<T>` support using NATS inbox
 - **Multi-Tenancy** - Account-based isolation (future consideration)
 
 ### ⚠️ Known Limitations
