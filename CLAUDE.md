@@ -80,8 +80,7 @@ dotnet test
 
 ## Sample Projects
 1. **PingPong** - Basic Core NATS messaging example
-2. **StandardsAlignedExample** - Shows request/reply patterns
-3. **OrderProcessingWithJetStream** - Comprehensive JetStream example with:
+2. **OrderProcessingWithJetStream** - Comprehensive JetStream example with:
    - Event-driven architecture
    - Saga pattern implementation
    - Consumer groups for horizontal scaling
