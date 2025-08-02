@@ -22,7 +22,7 @@ All services communicate through NATS JetStream using the ORDERS stream.
 The OrderService demonstrates using the new stream configuration helpers:
 
 ```csharp
-opts.UseNats("nats://localhost:4223")
+opts.UseNats(natsUrl)  // Uses NATS_URL env var or defaults to localhost:4222
     .DefineStream("ORDERS", stream =>
     {
         stream.WithSubjects(
@@ -39,11 +39,25 @@ opts.UseNats("nats://localhost:4223")
     });
 ```
 
+## Configuration
+
+The services use the following connection string priority:
+1. `NATS_URL` in appsettings.json (OrderService only)
+2. `NATS_URL` environment variable
+3. Default: `nats://localhost:4222`
+
+To use a custom NATS server:
+```bash
+export NATS_URL=nats://your-server:4222
+dotnet run
+```
+
 ## Running the Sample
 
 1. Start NATS with JetStream:
 ```bash
-docker-compose up -d
+# From repository root
+docker compose up -d
 ```
 
 2. Run all services:

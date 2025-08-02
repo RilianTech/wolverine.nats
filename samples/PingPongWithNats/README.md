@@ -4,14 +4,29 @@ This sample demonstrates using Wolverine with NATS transport for basic messaging
 
 ## Prerequisites
 
-1. NATS Server running locally on port 4222
+1. NATS Server running (defaults to localhost:4222)
    ```bash
-   # Using Docker
+   # Using Docker Compose from repository root
+   docker compose up -d
+   
+   # Or run NATS directly
    docker run -d --name nats -p 4222:4222 -p 8222:8222 nats -js
    
    # Or using NATS CLI
    nats-server -js
    ```
+
+## Configuration
+
+The samples use the following connection string priority:
+1. `NATS_URL` environment variable
+2. Default: `nats://localhost:4222`
+
+To use a custom NATS server:
+```bash
+export NATS_URL=nats://your-server:4222
+dotnet run
+```
 
 ## Running the Sample
 

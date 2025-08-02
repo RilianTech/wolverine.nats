@@ -11,7 +11,8 @@ await Host.CreateDefaultBuilder(args)
         opts.ApplicationAssembly = typeof(Program).Assembly;
 
         // Configure NATS transport
-        opts.UseNats("nats://localhost:4223");
+        var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
+        opts.UseNats(natsUrl);
 
         // Listen to ping messages
         opts.ListenToNatsSubject("pings");

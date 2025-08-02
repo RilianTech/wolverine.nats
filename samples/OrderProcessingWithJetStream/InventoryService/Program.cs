@@ -19,7 +19,8 @@ builder.Services.AddHostedService<InventoryInitializer>();
 builder.UseWolverine(opts =>
 {
     // Configure NATS transport with defaults for all endpoints
-    opts.UseNats("nats://localhost:4223") // Using docker-compose port
+    var natsUrl = Environment.GetEnvironmentVariable("NATS_URL") ?? "nats://localhost:4222";
+    opts.UseNats(natsUrl)
         // Define the ORDERS stream (will only create if doesn't exist)
         .DefineStream("ORDERS", stream =>
         {

@@ -21,7 +21,10 @@ builder.Services.AddSingleton<IOrderRepository, InMemoryOrderRepository>();
 builder.Host.UseWolverine(opts =>
 {
     // Configure NATS transport with JetStream
-    var natsTransport = opts.UseNats("nats://localhost:4223") // Using docker-compose port
+    var natsUrl = builder.Configuration["NATS_URL"] ?? 
+                  Environment.GetEnvironmentVariable("NATS_URL") ?? 
+                  "nats://localhost:4222";
+    var natsTransport = opts.UseNats(natsUrl)
         // Define the ORDERS stream with all subjects it will handle
         .DefineStream("ORDERS", stream =>
         {
