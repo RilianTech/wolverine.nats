@@ -272,7 +272,25 @@ docker compose up -d
 # Check if NATS is running
 docker compose logs wolverine-nats-test
 
+# Check health
+docker compose ps
+
 # Access monitoring at http://localhost:8223
+```
+
+**Docker Configuration:**
+- **Port**: 4223 (mapped from container's 4222)
+- **Monitoring**: 8223 (mapped from container's 8222)
+- **JetStream**: Enabled with 1GB memory, 10GB file storage
+- **Data**: Persisted in Docker volume `wolverine-nats-data`
+
+**Cleanup:**
+```bash
+# Stop and remove containers
+docker compose down
+
+# Remove data volume (optional)
+docker volume rm wolverine-nats_wolverine-nats-data
 ```
 
 ### Testing with Sample Applications
