@@ -307,6 +307,30 @@ The GitHub Actions workflow runs tests separately for each framework to avoid co
 
 ## Getting Started
 
+### Quick Start with Make
+
+The easiest way to get started is using the provided Makefile:
+
+```bash
+# Set up development environment (starts NATS, restores packages, builds)
+make dev-setup
+
+# Run all tests
+make test-all
+
+# Run only unit tests
+make test
+
+# Run only integration tests (starts NATS if needed)
+make test-integration
+
+# View all available commands
+make help
+
+# If you have NATS running on a different port:
+NATS_URL=nats://localhost:4223 make test-integration
+```
+
 ### Running NATS Server
 
 For development and testing, use the provided Docker Compose setup:
