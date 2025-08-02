@@ -318,6 +318,13 @@ See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture a
 - **Request/Reply Pattern** - `InvokeAsync<T>` support using NATS inbox
 - **Multi-Tenancy** - Account-based isolation (future consideration)
 
+### ⚠️ Known Limitations
+
+#### Scheduled Send
+NATS does not support native scheduled send functionality. When using Wolverine's scheduled send features (e.g., `SendAsync` with `DeliveryOptions.ScheduleDelay`), messages will be wrapped in Wolverine's internal "scheduled-envelope" format and held by Wolverine until the scheduled time.
+
+This differs from NATS JetStream's NAK with delay functionality, which is designed for consumer-side message redelivery rather than producer-side scheduled sending. See [NATS Server Issue #2846](https://github.com/nats-io/nats-server/issues/2846) for more details on NATS's approach to delayed message delivery.
+
 ## Architecture
 
 This transport follows Wolverine's standard transport patterns:

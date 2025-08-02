@@ -1,5 +1,16 @@
-# Uncomment this entire file when ready to publish releases to NuGet
-# 
+# This release workflow is currently disabled
+# Remove this section and uncomment the workflow below when ready to publish releases to NuGet
+
+name: Release (Disabled)
+on: [workflow_dispatch]  # Manual trigger only
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflow Disabled
+        run: echo "This release workflow is currently disabled. Edit this file to enable automatic releases."
+
+# Uncomment the workflow below when ready to publish releases to NuGet
 # name: Release
 # 
 # on:
