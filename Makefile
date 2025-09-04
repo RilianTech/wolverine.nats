@@ -41,6 +41,16 @@ check-docker:
 		exit 1; \
 	fi
 
+# Start NATS container using docker-compose
+.PHONY: nats-compose
+nats-compose: check-docker ## Start NATS server using docker-compose with JetStream enabled
+	@echo "Starting NATS server with docker-compose..."
+	@docker compose up -d
+	@echo "Waiting for NATS to be ready..."
+	@sleep 2
+	@echo "NATS server is running on port $(NATS_PORT)"
+	@echo "NATS monitoring UI available at http://localhost:$(NATS_MONITOR_PORT)"
+
 # Start NATS container
 .PHONY: nats-start
 nats-start: check-docker ## Start NATS server in Docker with JetStream enabled
@@ -63,6 +73,12 @@ nats-start: check-docker ## Start NATS server in Docker with JetStream enabled
 	@sleep 2
 	@echo "NATS server is running on port $(NATS_PORT)"
 	@echo "NATS monitoring UI available at http://localhost:$(NATS_MONITOR_PORT)"
+
+# Stop NATS container using docker compose
+.PHONY: nats-compose-down
+nats-compose-down: ## Stop NATS server started with docker compose
+	@echo "Stopping NATS server (docker compose)..."
+	@docker compose down
 
 # Stop NATS container
 .PHONY: nats-stop
