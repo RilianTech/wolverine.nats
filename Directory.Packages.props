@@ -5,9 +5,9 @@
   
   <ItemGroup>
     <!-- Core dependencies -->
-    <PackageVersion Include="WolverineFx" Version="4.5.3" />
-    <PackageVersion Include="NATS.Net" Version="2.5.7" />
-    <PackageVersion Include="JasperFx" Version="1.2.2" />
+    <PackageVersion Include="WolverineFx" Version="4.10.1" />
+    <PackageVersion Include="NATS.Net" Version="2.6.8" />
+    <PackageVersion Include="JasperFx" Version="1.6.0" />
     
     <!-- Microsoft.Extensions - Using 9.0 versions to match Wolverine 4.5.3 dependencies -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
