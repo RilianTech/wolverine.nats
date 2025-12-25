@@ -1,9 +1,9 @@
+using JasperFx.Blocks;
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
 using Wolverine.Runtime;
 using Wolverine.Transports;
 using Wolverine.Transports.Sending;
-using Wolverine.Util.Dataflow;
 
 namespace Wolverine.Nats.Internal;
 
@@ -46,7 +46,7 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
                 // For JetStream messages, acknowledge them
                 if (envelope.JetStreamMsg != null)
                 {
-                    await envelope.JetStreamMsg.Value.AckAsync(
+                    await envelope.JetStreamMsg.AckAsync(
                         cancellationToken: _cancellation.Token
                     );
                 }
@@ -61,7 +61,7 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
                 // For JetStream messages, NAck to trigger redelivery
                 if (envelope.JetStreamMsg != null)
                 {
-                    await envelope.JetStreamMsg.Value.NakAsync(
+                    await envelope.JetStreamMsg.NakAsync(
                         cancellationToken: _cancellation.Token
                     );
                 }
@@ -87,13 +87,13 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
             // Handle dead letter queue
             if (NativeDeadLetterQueueEnabled && natsEnvelope.JetStreamMsg != null)
             {
-                var metadata = natsEnvelope.JetStreamMsg.Value.Metadata;
+                var metadata = natsEnvelope.JetStreamMsg.Metadata;
 
                 // Check if we've exceeded delivery attempts
                 if (metadata?.NumDelivered >= (ulong)_endpoint.MaxDeliveryAttempts)
                 {
                     // Acknowledge the message to prevent further redelivery
-                    await natsEnvelope.JetStreamMsg.Value.AckAsync(
+                    await natsEnvelope.JetStreamMsg.AckAsync(
                         cancellationToken: _cancellation.Token
                     );
 

@@ -70,23 +70,19 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
             );
         }
 
-        // Copy any additional headers that aren't reserved
+        // Copy all headers from the incoming message
         if (incoming.Headers != null)
         {
-            var reservedHeaders = AllHeaders();
             foreach (var header in incoming.Headers)
             {
-                if (!reservedHeaders.Contains(header.Key))
-                {
-                    envelope.Headers[header.Key] = header.Value;
-                }
+                envelope.Headers[header.Key] = header.Value;
             }
         }
     }
 }
 
 // Separate mapper for JetStream messages
-public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHeaders>
+public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHeaders>
 {
     private readonly ITenantSubjectMapper? _tenantMapper;
     
@@ -102,7 +98,7 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
     }
 
     protected override bool tryReadIncomingHeader(
-        NatsJSMsg<byte[]> incoming,
+        INatsJSMsg<byte[]> incoming,
         string key,
         out string? value
     )
@@ -123,7 +119,7 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
         return false;
     }
 
-    protected override void writeIncomingHeaders(NatsJSMsg<byte[]> incoming, Envelope envelope)
+    protected override void writeIncomingHeaders(INatsJSMsg<byte[]> incoming, Envelope envelope)
     {
         // Copy the data payload
         envelope.Data = incoming.Data;
@@ -163,16 +159,12 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<NatsJSMsg<byte[]>, NatsHea
             envelope.Headers["nats-consumer-seq"] = metadata.Sequence.Consumer.ToString();
         }
 
-        // Copy any additional headers that aren't reserved
+        // Copy all headers from the incoming message
         if (incoming.Headers != null)
         {
-            var reservedHeaders = AllHeaders();
             foreach (var header in incoming.Headers)
             {
-                if (!reservedHeaders.Contains(header.Key))
-                {
-                    envelope.Headers[header.Key] = header.Value;
-                }
+                envelope.Headers[header.Key] = header.Value;
             }
         }
     }

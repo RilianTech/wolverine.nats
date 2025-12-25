@@ -1,37 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Most properties inherited from Directory.Build.props -->
-    <RootNamespace>Wolverine.Nats</RootNamespace>
-    <AssemblyName>Wolverine.Nats</AssemblyName>
-    
-    <!-- NuGet package metadata -->
-    <PackageId>Wolverine.Nats</PackageId>
-    <Description>NATS transport support for the Wolverine messaging framework. Provides both Core NATS and JetStream support with full integration of Wolverine's durability, error handling, and messaging patterns.</Description>
-    <PackageTags>wolverine;messaging;nats;jetstream;transport;microservices;distributed</PackageTags>
-    <PackageProjectUrl>https://github.com/yourusername/Wolverine.Nats</PackageProjectUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <!-- <PackageIcon>icon.png</PackageIcon> -->
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/yourusername/Wolverine.Nats</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    
-    <!-- Enable package generation -->
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <Description>NATS Transport for Wolverine Messaging Systems</Description>
+    <PackageId>WolverineFx.Nats</PackageId>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="WolverineFx" />
     <PackageReference Include="NATS.Net" />
-    <PackageReference Include="JasperFx" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
   </ItemGroup>
 
 </Project>
