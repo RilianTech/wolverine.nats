@@ -460,8 +460,6 @@ See `samples/OrderProcessingWithJetStream/README.md` for detailed architecture a
 - **Authentication & TLS** - Multiple authentication methods
 - **MQTT Gateway Ready** - Works with NATS MQTT gateway out-of-the-box
 
-### 🚧 Planned Features
-- **Wolverine Multi-Tenancy Integration** - While NATS supports multi-tenancy through accounts and JWT authentication (which we support), integration with Wolverine's multi-tenancy abstractions (TenantedSender, tenant routing) is planned. See [Multi-Tenancy Design](docs/WOLVERINE-MULTITENANCY-DESIGN.md) for implementation details.
 
 ### ⚠️ Known Limitations
 
