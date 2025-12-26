@@ -196,3 +196,11 @@ public class NatsTransportIntegrationTests : IAsyncLifetime
 }
 
 public record TestMessage(Guid Id, string Text);
+
+public class TestMessageHandler
+{
+    public void Handle(TestMessage message)
+    {
+        // Handler is required for Wolverine's message tracking to register the message as processed
+    }
+}
