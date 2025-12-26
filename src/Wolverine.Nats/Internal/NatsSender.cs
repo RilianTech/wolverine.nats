@@ -59,7 +59,6 @@ public class NatsSender : ISender
             var headers = new NatsHeaders();
             _mapper.MapEnvelopeToOutgoing(envelope, headers);
 
-            // Add custom headers specific to this endpoint
             foreach (var header in _endpoint.CustomHeaders)
             {
                 headers[header.Key] = header.Value;
@@ -67,14 +66,11 @@ public class NatsSender : ISender
 
             var data = envelope.Data ?? Array.Empty<byte>();
 
-            // Determine the target subject and reply-to
             var targetSubject = _endpoint.Subject;
             string? replyTo = null;
 
-            // Handle special case for reply messages
             if (envelope.IsResponse && envelope.ReplyUri != null)
             {
-                // This is a reply message, send directly to the reply subject
                 targetSubject = NatsTransport.ExtractSubjectFromUri(envelope.ReplyUri);
 
                 if (_logger.IsEnabled(LogLevel.Debug))
@@ -88,8 +84,6 @@ public class NatsSender : ISender
             }
             else
             {
-                // Only set reply-to for actual request/reply patterns (when a reply is expected)
-                // ReplyRequested indicates this is an InvokeAsync call expecting a response
                 if (envelope.ReplyRequested != null && envelope.ReplyUri != null)
                 {
                     replyTo = NatsTransport.ExtractSubjectFromUri(envelope.ReplyUri);
@@ -118,7 +112,6 @@ public class NatsSender : ISender
                 }
             }
 
-            // Delegate to the appropriate publisher
             await _publisher.PublishAsync(
                 targetSubject,
                 data,

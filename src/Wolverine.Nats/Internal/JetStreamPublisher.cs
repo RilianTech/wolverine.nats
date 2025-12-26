@@ -25,7 +25,6 @@ internal class JetStreamPublisher : INatsPublisher
     {
         try
         {
-            // For JetStream, we can check if the stream management API is responsive
             var pingSubject = $"_INBOX.wolverine.ping.{Guid.NewGuid():N}";
             await _connection.PublishAsync(
                 pingSubject,
@@ -50,7 +49,6 @@ internal class JetStreamPublisher : INatsPublisher
         CancellationToken cancellation
     )
     {
-        // Reply messages always use Core NATS
         if (envelope.IsResponse)
         {
             await _connection.PublishAsync(
@@ -72,7 +70,6 @@ internal class JetStreamPublisher : INatsPublisher
         }
         else
         {
-            // Regular messages use JetStream
             var ack = await _jetStreamContext.PublishAsync(
                 subject,
                 data,

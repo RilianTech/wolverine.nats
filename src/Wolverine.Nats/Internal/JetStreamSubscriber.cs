@@ -53,7 +53,6 @@ internal class JetStreamSubscriber : INatsSubscriber
             _endpoint.Subject
         );
 
-        // Create or get consumer
         var config = new ConsumerConfig
         {
             AckPolicy = ConsumerConfigAckPolicy.Explicit,
@@ -61,7 +60,6 @@ internal class JetStreamSubscriber : INatsSubscriber
             AckWait = TimeSpan.FromSeconds(30)
         };
 
-        // Only set filter subject if not using a durable consumer
         if (string.IsNullOrEmpty(_endpoint.ConsumerName))
         {
             config.FilterSubject = _subscriptionPattern;
@@ -69,17 +67,14 @@ internal class JetStreamSubscriber : INatsSubscriber
 
         if (!string.IsNullOrEmpty(_endpoint.ConsumerName))
         {
-            // Create or update durable consumer
             config.Name = _endpoint.ConsumerName;
             config.DurableName = _endpoint.ConsumerName;
 
-            // Add queue group if specified
             if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
             {
                 config.DeliverGroup = _endpoint.QueueGroup;
             }
 
-            // Try to get existing consumer first
             try
             {
                 _consumer = await _jetStreamContext.GetConsumerAsync(
@@ -94,7 +89,6 @@ internal class JetStreamSubscriber : INatsSubscriber
             }
             catch (NatsJSException)
             {
-                // Consumer doesn't exist, create it
                 _consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
                     _endpoint.StreamName!,
                     config,
@@ -105,7 +99,6 @@ internal class JetStreamSubscriber : INatsSubscriber
         }
         else
         {
-            // Create ephemeral consumer
             _consumer = await _jetStreamContext.CreateOrUpdateConsumerAsync(
                 _endpoint.StreamName!,
                 config,
@@ -117,7 +110,6 @@ internal class JetStreamSubscriber : INatsSubscriber
             );
         }
 
-        // Subscribe to the consumer
         _consumerTask = Task.Run(
             async () =>
             {
@@ -127,19 +119,12 @@ internal class JetStreamSubscriber : INatsSubscriber
                 {
                     try
                     {
-                        // Skip empty messages - NATS protocol explicitly supports empty messages (0 byte payload)
-                        // as documented in the NATS protocol specification. These are often used for:
-                        // - Signaling/notifications where the message presence itself is the information
-                        // - Acknowledgments in request/reply patterns
-                        // - Keep-alive or heartbeat messages
-                        // Since Wolverine requires message content for deserialization, we skip these messages
                         if (msg.Data == null || msg.Data.Length == 0)
                         {
                             _logger.LogDebug(
                                 "Skipping empty JetStream message from subject {Subject}",
                                 msg.Subject
                             );
-                            // Still need to acknowledge the message in JetStream to prevent redelivery
                             await msg.AckAsync(cancellationToken: cancellation);
                             continue;
                         }

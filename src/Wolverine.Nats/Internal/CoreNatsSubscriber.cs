@@ -42,13 +42,10 @@ internal class CoreNatsSubscriber : INatsSubscriber
     {
         var patterns = new List<string>();
         
-        // If this is a multi-tenant subscription, we need to subscribe to both:
-        // 1. The wildcard pattern (e.g., "*.orders") for tenant-specific messages
-        // 2. The base subject (e.g., "orders") for non-tenant messages in fallback mode
         if (_subscriptionPattern != _endpoint.Subject && _subscriptionPattern.StartsWith("*."))
         {
-            patterns.Add(_subscriptionPattern); // Wildcard pattern for tenant messages
-            patterns.Add(_endpoint.Subject);    // Base subject for non-tenant messages
+            patterns.Add(_subscriptionPattern);
+            patterns.Add(_endpoint.Subject);
             
             _logger.LogInformation(
                 "Multi-tenant subscription: listening to patterns '{WildcardPattern}' and '{BaseSubject}' for subject '{Subject}'",
@@ -69,7 +66,6 @@ internal class CoreNatsSubscriber : INatsSubscriber
             );
         }
 
-        // Create subscriptions for each pattern
         foreach (var pattern in patterns)
         {
             IAsyncDisposable subscription;
@@ -103,12 +99,6 @@ internal class CoreNatsSubscriber : INatsSubscriber
                         {
                             try
                             {
-                                // Skip empty messages - NATS protocol explicitly supports empty messages (0 byte payload)
-                                // as documented in the NATS protocol specification. These are often used for:
-                                // - Signaling/notifications where the message presence itself is the information
-                                // - Acknowledgments in request/reply patterns
-                                // - Keep-alive or heartbeat messages
-                                // Since Wolverine requires message content for deserialization, we skip these messages
                                 if (msg.Data == null || msg.Data.Length == 0)
                                 {
                                     _logger.LogDebug(
@@ -135,7 +125,6 @@ internal class CoreNatsSubscriber : INatsSubscriber
                     }
                     catch (OperationCanceledException)
                     {
-                        // Expected during shutdown
                         _logger.LogDebug(
                             "NATS listener for pattern {Pattern} was cancelled",
                             pattern

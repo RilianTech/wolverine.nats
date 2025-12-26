@@ -18,8 +18,7 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
     private NatsConnection? _connection;
     private INatsJSContext? _jetStreamContext;
     private ILogger<NatsTransport>? _logger;
-    
-    // Multi-tenancy support
+
     internal JasperFx.Core.LightweightCache<string, NatsTenant> Tenants { get; } = new();
     internal ITenantSubjectMapper TenantSubjectMapper { get; set; } = new DefaultTenantSubjectMapper();
 
@@ -66,13 +65,11 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
     {
         _logger = runtime.LoggerFactory.CreateLogger<NatsTransport>();
 
-        // Configure response subject with node identifier
         ResponseSubject = $"wolverine.response.{runtime.Options.Durability.AssignedNodeNumber}";
         var responseEndpoint = _endpoints[ResponseSubject];
         responseEndpoint.IsUsedForReplies = true;
         responseEndpoint.IsListener = true;
 
-        // Initialize NATS connection
         var natsOpts = Configuration.ToNatsOpts();
         natsOpts = natsOpts with { Name = $"wolverine-{runtime.Options.ServiceName}" };
         _connection = new NatsConnection(natsOpts);
@@ -80,13 +77,11 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
 
         _logger.LogInformation("Connected to NATS at {Url}", Configuration.ConnectionString);
 
-        // Initialize JetStream context if enabled
         if (Configuration.EnableJetStream)
         {
             _jetStreamContext = _connection.CreateJetStreamContext();
             _logger.LogInformation("JetStream context initialized");
 
-            // Provision configured streams
             if (Configuration.AutoProvision && Configuration.Streams.Any())
             {
                 await ProvisionStreamsAsync();
@@ -114,7 +109,6 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
             throw new ArgumentException($"Invalid URI scheme. Expected 'nats', got '{uri.Scheme}'");
         }
 
-        // Handle both nats://subject and nats://server/subject formats
         var path = uri.LocalPath.Trim('/');
         return string.IsNullOrEmpty(path) ? uri.Host : path;
     }
@@ -151,7 +145,6 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
         {
             try
             {
-                // Check if stream exists
                 var exists = false;
                 try
                 {
@@ -161,20 +154,18 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
                 }
                 catch (NatsJSException)
                 {
-                    // Stream doesn't exist, we'll create it
                 }
 
                 if (!exists)
                 {
-                    // Create stream configuration
                     var streamConfig = new StreamConfig(name, config.Subjects)
                     {
                         Retention = config.Retention,
                         Storage = config.Storage,
-                        MaxMsgs = config.MaxMessages ?? -1, // -1 for unlimited
-                        MaxBytes = config.MaxBytes ?? -1, // -1 for unlimited
-                        MaxAge = config.MaxAge ?? TimeSpan.Zero, // 0 for unlimited
-                        MaxMsgsPerSubject = config.MaxMessagesPerSubject ?? 0, // 0 for default
+                        MaxMsgs = config.MaxMessages ?? -1,
+                        MaxBytes = config.MaxBytes ?? -1,
+                        MaxAge = config.MaxAge ?? TimeSpan.Zero,
+                        MaxMsgsPerSubject = config.MaxMessagesPerSubject ?? 0,
                         Discard = config.DiscardPolicy,
                         NumReplicas = config.Replicas,
                         AllowRollupHdrs = config.AllowRollup,
@@ -192,7 +183,6 @@ public class NatsTransport : BrokerTransport<NatsEndpoint>, IAsyncDisposable
                 }
                 else
                 {
-                    // Optionally update stream if configuration has changed
                     _logger?.LogDebug(
                         "Stream {StreamName} already exists, skipping creation",
                         name

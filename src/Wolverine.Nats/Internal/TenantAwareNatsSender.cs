@@ -26,13 +26,11 @@ internal class TenantAwareNatsSender : ISender
 
     public async ValueTask SendAsync(Envelope envelope)
     {
-        // Clone the envelope to avoid modifying the original
         var tenantEnvelope = new Envelope(envelope)
         {
             TenantId = _tenantId
         };
 
-        // Map the destination to include tenant information
         if (tenantEnvelope.Destination != null)
         {
             var originalSubject = NatsTransport.ExtractSubjectFromUri(tenantEnvelope.Destination);
@@ -40,7 +38,6 @@ internal class TenantAwareNatsSender : ISender
             tenantEnvelope.Destination = new Uri($"nats://subject/{tenantSubject}");
         }
 
-        // Send using the inner sender
         await _innerSender.SendAsync(tenantEnvelope);
     }
 }

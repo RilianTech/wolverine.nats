@@ -12,19 +12,11 @@ await builder
     {
         opts.ApplicationAssembly = typeof(Program).Assembly;
 
-        // Configure NATS transport using configuration
         opts.UseNats(builder.Configuration);
 
-        // Listen to ping messages
         opts.ListenToNatsSubject("pings");
-
-        // Configure where to send Pong messages
         opts.PublishMessage<Pong>().ToNatsSubject("pongs");
 
-        // TODO: Add JetStream support
-        // For now, using Core NATS for at-most-once delivery
-
-        // Enable console logging to see what's happening
         opts.Services.AddLogging(logging =>
         {
             logging.AddConsole();

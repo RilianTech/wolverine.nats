@@ -79,7 +79,7 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         {
             EndpointMode.Inline => true,
             EndpointMode.BufferedInMemory => true,
-            EndpointMode.Durable => UseJetStream, // Only support durable mode with JetStream
+            EndpointMode.Durable => UseJetStream,
             _ => false
         };
     }
@@ -90,13 +90,11 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         _logger = runtime.LoggerFactory.CreateLogger<NatsEndpoint>();
         _mapper = new NatsEnvelopeMapper(this);
 
-        // Configure the mapper with MessageType if set
         if (MessageType != null)
         {
             _mapper.ReceivesMessage(MessageType);
         }
 
-        // Create the base sender
         var baseSender = NatsSender.Create(
             this,
             _connection,
@@ -106,18 +104,15 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             UseJetStream && _transport.Configuration.EnableJetStream
         );
 
-        // If transport has tenants configured and this endpoint is tenant-aware, create a TenantedSender
         if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
         {
             var tenantedSender = new TenantedSender(Uri, _transport.TenantedIdBehavior, baseSender);
-            
+
             foreach (var tenant in _transport.Tenants)
             {
-                // Create a new endpoint with tenant-specific subject
                 var subjectMapper = tenant.SubjectMapper ?? _transport.TenantSubjectMapper;
                 var tenantSubject = subjectMapper.MapSubject(Subject, tenant.TenantId);
-                
-                // Create a new endpoint for this tenant with the mapped subject
+
                 var tenantEndpoint = new NatsEndpoint(tenantSubject, _transport, Role)
                 {
                     UseJetStream = UseJetStream,
@@ -131,8 +126,7 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
                     CustomHeaders = CustomHeaders,
                     NatsSerializer = NatsSerializer
                 };
-                
-                // Create a sender for the tenant-specific endpoint
+
                 var tenantSender = NatsSender.Create(
                     tenantEndpoint,
                     _connection,
@@ -141,10 +135,10 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
                     runtime.Cancellation,
                     UseJetStream && _transport.Configuration.EnableJetStream
                 );
-                
+
                 tenantedSender.RegisterSender(tenant.TenantId, tenantSender);
             }
-            
+
             return tenantedSender;
         }
 
@@ -159,7 +153,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         _connection = _transport.Connection;
         _logger = runtime.LoggerFactory.CreateLogger<NatsEndpoint>();
 
-        // Create dead letter sender if needed
         ISender? deadLetterSender = null;
         if (!string.IsNullOrEmpty(DeadLetterSubject))
         {
@@ -167,13 +160,11 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             deadLetterSender = (ISender)runtime.Endpoints.GetOrBuildSendingAgent(dlqEndpoint.Uri);
         }
 
-        // Determine the subscription pattern based on multi-tenancy configuration
         string subscriptionPattern = Subject;
         ITenantSubjectMapper? tenantMapper = null;
-        
+
         if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
         {
-            // Use the transport's default mapper or a custom one if configured
             tenantMapper = _transport.TenantSubjectMapper;
             subscriptionPattern = tenantMapper.GetSubscriptionPattern(Subject);
         }
@@ -201,7 +192,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
         var headers = new NatsHeaders();
         _mapper?.MapEnvelopeToOutgoing(envelope, headers);
 
-        // Add custom headers specific to this endpoint
         foreach (var header in CustomHeaders)
         {
             headers[header.Key] = header.Value;
@@ -212,7 +202,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
 
     public async ValueTask<bool> CheckAsync()
     {
-        // Ensure we have a connection
         _connection ??= _transport.Connection;
 
         if (_connection == null || _connection.ConnectionState != NatsConnectionState.Open)
@@ -220,13 +209,11 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             return false;
         }
 
-        // For Core NATS, connection check is enough
         if (!UseJetStream || string.IsNullOrEmpty(StreamName))
         {
             return true;
         }
 
-        // For JetStream, check if the stream exists
         try
         {
             var js = _connection.CreateJetStreamContext();
@@ -244,7 +231,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
 
     public async ValueTask TeardownAsync(ILogger logger)
     {
-        // Ensure we have a connection
         _connection ??= _transport.Connection;
 
         if (_connection == null || _connection.ConnectionState != NatsConnectionState.Open)
@@ -252,13 +238,11 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             return;
         }
 
-        // For Core NATS, nothing to tear down
         if (!UseJetStream || string.IsNullOrEmpty(StreamName))
         {
             return;
         }
 
-        // For JetStream, we might want to delete consumers (but not streams)
         if (!string.IsNullOrEmpty(ConsumerName))
         {
             try
@@ -285,7 +269,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
 
     public async ValueTask SetupAsync(ILogger logger)
     {
-        // Ensure we have a connection
         _connection ??= _transport.Connection;
 
         if (_connection == null || _connection.ConnectionState != NatsConnectionState.Open)
@@ -293,38 +276,32 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             throw new InvalidOperationException("NATS connection is not available or not open");
         }
 
-        // For Core NATS, nothing to set up
         if (!UseJetStream || string.IsNullOrEmpty(StreamName))
         {
             logger.LogInformation("Using Core NATS for subject {Subject}", Subject);
             return;
         }
 
-        // For JetStream, ensure the stream exists
         var js = _connection.CreateJetStreamContext();
 
         try
         {
-            // Try to get the stream first
             var stream = await js.GetStreamAsync(StreamName);
             logger.LogInformation("Using existing JetStream stream {Stream}", StreamName);
         }
         catch
         {
-            // Stream doesn't exist, create it
-            // For multi-tenant endpoints, we need to configure the stream to capture all tenant subjects
             var subjects = new List<string> { Subject };
-            
+
             if (_transport.Tenants.Any() && TenancyBehavior == TenancyBehavior.TenantAware)
             {
-                // Add wildcard pattern to capture tenant-specific subjects
                 var wildcardPattern = _transport.TenantSubjectMapper.GetSubscriptionPattern(Subject);
                 if (wildcardPattern != Subject)
                 {
                     subjects.Add(wildcardPattern);
                 }
             }
-            
+
             logger.LogInformation(
                 "Creating JetStream stream {Stream} for subjects {Subjects}",
                 StreamName,
@@ -333,7 +310,7 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
 
             var config = new StreamConfig(StreamName, subjects)
             {
-                Retention = StreamConfigRetention.Workqueue, // Delete after ack
+                Retention = StreamConfigRetention.Workqueue,
                 Discard = StreamConfigDiscard.Old,
                 MaxAge = TimeSpan.FromDays(1),
                 DuplicateWindow = TimeSpan.FromMinutes(2),
@@ -344,7 +321,6 @@ public class NatsEndpoint : Endpoint, IBrokerEndpoint
             logger.LogInformation("Created JetStream stream {Stream}", StreamName);
         }
 
-        // Set up consumer if needed
         if (!string.IsNullOrEmpty(ConsumerName) && Role == EndpointRole.Application)
         {
             var consumerConfig = new ConsumerConfig

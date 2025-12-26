@@ -43,7 +43,6 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         _complete = new RetryBlock<NatsEnvelope>(
             async (envelope, _) =>
             {
-                // For JetStream messages, acknowledge them
                 if (envelope.JetStreamMsg != null)
                 {
                     await envelope.JetStreamMsg.AckAsync(
@@ -58,7 +57,6 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
         _defer = new RetryBlock<NatsEnvelope>(
             async (envelope, _) =>
             {
-                // For JetStream messages, NAck to trigger redelivery
                 if (envelope.JetStreamMsg != null)
                 {
                     await envelope.JetStreamMsg.NakAsync(
@@ -66,7 +64,6 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
                     );
                 }
 
-                // For core NATS, we'll need to manually retry
                 await Task.Delay(TimeSpan.FromSeconds(5), _cancellation.Token);
                 await _receiver.ReceivedAsync(this, envelope);
             },
@@ -77,32 +74,26 @@ public class NatsListener : IListener, ISupportDeadLetterQueue
 
     public Uri Address { get; }
 
-    // ISupportDeadLetterQueue implementation
     public bool NativeDeadLetterQueueEnabled => _subscriber.SupportsNativeDeadLetterQueue;
 
     public async Task MoveToErrorsAsync(Envelope envelope, Exception exception)
     {
         if (envelope is NatsEnvelope natsEnvelope)
         {
-            // Handle dead letter queue
             if (NativeDeadLetterQueueEnabled && natsEnvelope.JetStreamMsg != null)
             {
                 var metadata = natsEnvelope.JetStreamMsg.Metadata;
 
-                // Check if we've exceeded delivery attempts
                 if (metadata?.NumDelivered >= (ulong)_endpoint.MaxDeliveryAttempts)
                 {
-                    // Acknowledge the message to prevent further redelivery
                     await natsEnvelope.JetStreamMsg.AckAsync(
                         cancellationToken: _cancellation.Token
                     );
 
-                    // Send to dead letter queue if configured
                     if (!string.IsNullOrEmpty(_endpoint.DeadLetterSubject))
                     {
                         envelope.Attempts = (int)(metadata?.NumDelivered ?? 1);
 
-                        // Add DLQ metadata to the envelope
                         envelope.Headers["x-dlq-reason"] = exception.Message;
                         envelope.Headers["x-dlq-timestamp"] = DateTimeOffset.UtcNow.ToString("O");
                         envelope.Headers["x-dlq-original-subject"] = _endpoint.Subject;

@@ -8,7 +8,7 @@ namespace Wolverine.Nats.Internal;
 public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 {
     private readonly ITenantSubjectMapper? _tenantMapper;
-    
+
     public NatsEnvelopeMapper(NatsEndpoint endpoint, ITenantSubjectMapper? tenantMapper = null)
         : base(endpoint)
     {
@@ -44,13 +44,10 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
 
     protected override void writeIncomingHeaders(NatsMsg<byte[]> incoming, Envelope envelope)
     {
-        // Copy the data payload
         envelope.Data = incoming.Data;
 
-        // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
-        
-        // Extract tenant ID from the subject if tenant mapper is configured
+
         if (_tenantMapper != null)
         {
             var tenantId = _tenantMapper.ExtractTenantId(incoming.Subject);
@@ -60,7 +57,6 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
             }
         }
 
-        // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))
         {
             EnvelopeSerializer.ReadDataElement(
@@ -70,7 +66,6 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
             );
         }
 
-        // Copy all headers from the incoming message
         if (incoming.Headers != null)
         {
             foreach (var header in incoming.Headers)
@@ -81,11 +76,10 @@ public class NatsEnvelopeMapper : EnvelopeMapper<NatsMsg<byte[]>, NatsHeaders>
     }
 }
 
-// Separate mapper for JetStream messages
 public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHeaders>
 {
     private readonly ITenantSubjectMapper? _tenantMapper;
-    
+
     public JetStreamEnvelopeMapper(NatsEndpoint endpoint, ITenantSubjectMapper? tenantMapper = null)
         : base(endpoint)
     {
@@ -121,13 +115,10 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHe
 
     protected override void writeIncomingHeaders(INatsJSMsg<byte[]> incoming, Envelope envelope)
     {
-        // Copy the data payload
         envelope.Data = incoming.Data;
 
-        // Set the destination based on the NATS subject
         envelope.Destination = new Uri($"nats://subject/{incoming.Subject}");
-        
-        // Extract tenant ID from the subject if tenant mapper is configured
+
         if (_tenantMapper != null)
         {
             var tenantId = _tenantMapper.ExtractTenantId(incoming.Subject);
@@ -137,7 +128,6 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHe
             }
         }
 
-        // Handle NATS reply-to for request/reply pattern using EnvelopeSerializer
         if (!string.IsNullOrEmpty(incoming.ReplyTo))
         {
             EnvelopeSerializer.ReadDataElement(
@@ -147,7 +137,6 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHe
             );
         }
 
-        // Store JetStream metadata in envelope headers for potential use
         if (incoming.Metadata != null)
         {
             var metadata = incoming.Metadata.Value;
@@ -159,7 +148,6 @@ public class JetStreamEnvelopeMapper : EnvelopeMapper<INatsJSMsg<byte[]>, NatsHe
             envelope.Headers["nats-consumer-seq"] = metadata.Sequence.Consumer.ToString();
         }
 
-        // Copy all headers from the incoming message
         if (incoming.Headers != null)
         {
             foreach (var header in incoming.Headers)
