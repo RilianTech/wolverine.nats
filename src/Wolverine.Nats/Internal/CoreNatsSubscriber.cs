@@ -41,12 +41,12 @@ internal class CoreNatsSubscriber : INatsSubscriber
     )
     {
         var patterns = new List<string>();
-        
+
         if (_subscriptionPattern != _endpoint.Subject && _subscriptionPattern.StartsWith("*."))
         {
             patterns.Add(_subscriptionPattern);
             patterns.Add(_endpoint.Subject);
-            
+
             _logger.LogInformation(
                 "Multi-tenant subscription: listening to patterns '{WildcardPattern}' and '{BaseSubject}' for subject '{Subject}'",
                 _subscriptionPattern,
@@ -57,7 +57,7 @@ internal class CoreNatsSubscriber : INatsSubscriber
         else
         {
             patterns.Add(_subscriptionPattern);
-            
+
             _logger.LogInformation(
                 "Starting Core NATS listener for pattern {Pattern} (base subject: {Subject}) with queue group {QueueGroup}",
                 _subscriptionPattern,
@@ -69,7 +69,7 @@ internal class CoreNatsSubscriber : INatsSubscriber
         foreach (var pattern in patterns)
         {
             IAsyncDisposable subscription;
-            
+
             if (!string.IsNullOrEmpty(_endpoint.QueueGroup))
             {
                 subscription = await _connection.SubscribeCoreAsync<byte[]>(
@@ -85,7 +85,7 @@ internal class CoreNatsSubscriber : INatsSubscriber
                     cancellationToken: cancellation
                 );
             }
-            
+
             _subscriptions.Add(subscription);
 
             var consumerTask = Task.Run(
@@ -133,21 +133,37 @@ internal class CoreNatsSubscriber : INatsSubscriber
                 },
                 cancellation
             );
-            
+
             _consumerTasks.Add(consumerTask);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
+        // Dispose subscriptions first - this will cause ReadAllAsync to complete
         foreach (var subscription in _subscriptions)
         {
-            await subscription.DisposeAsync();
+            try
+            {
+                await subscription.DisposeAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore disposal errors
+            }
         }
 
+        // Wait for consumer tasks to complete - they should exit once subscriptions are disposed
         if (_consumerTasks.Any())
         {
-            await Task.WhenAll(_consumerTasks);
+            try
+            {
+                await Task.WhenAll(_consumerTasks);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+            }
         }
     }
 }
